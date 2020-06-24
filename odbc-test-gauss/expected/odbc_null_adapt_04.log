@@ -1,0 +1,8 @@
+Connected !
+SQLNumResultCols ---- Number of Columns 2
+SQLRowCount ----- Number of Rows 2
+SQLBindCol ----- Result: 5  
+SQLGetData ----name = 
+SQLBindCol ----- Result: 6  
+SQLGetData ----name = 
+exit code : 0

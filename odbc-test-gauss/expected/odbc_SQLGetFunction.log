@@ -1,0 +1,6 @@
+Connected Successfuly!
+SQL_API_SQLTABLES SQL_API_SQLCOLUMNS SQL_API_SQLSTATISTICS is true
+  SQLDescribeParam is true
+  SQLGETDESCREC is true
+  SQLSETDESCREC is true
+exit code : 0

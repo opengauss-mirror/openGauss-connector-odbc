@@ -1,0 +1,7 @@
+**** Entering CLIP06.
+
+ERROR: dn_6005_6006: value too long for type nvarchar2(5);
+Error while executing the query 
+**** Exiting  CLIP06.
+
+exit code : 0

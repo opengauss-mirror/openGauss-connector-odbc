@@ -1,0 +1,6 @@
+!expected/*.log
+odbc.ini
+regression.diff
+results.log
+log/
+

@@ -1,0 +1,5 @@
+Connected !
+ERROR: canceling statement due to statement timeout (110)
+SQLRowCount ----- Number of Rows 0
+GO ON!
+exit code : 0

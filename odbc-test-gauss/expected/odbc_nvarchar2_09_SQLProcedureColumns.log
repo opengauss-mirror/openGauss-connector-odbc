@@ -1,0 +1,12 @@
+**** Entering CLIP06.
+
+**** begin fetch  variable.
+**** Procedure Name = odbc_nvarchar2_09
+ Parameter  is UNKNOWN. Data Type is 12
+ Type Name is nvarchar2.
+**** Procedure Name = odbc_nvarchar2_09
+ Parameter firstname is INPUT. Data Type is 12
+ Type Name is nvarchar2.
+**** Exiting  CLIP06.
+
+exit code : 0

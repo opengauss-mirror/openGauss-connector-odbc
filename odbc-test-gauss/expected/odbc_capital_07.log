@@ -1,0 +1,9 @@
+Connected Successfuly!
+SQLNumResultCols ---- Number of Columns 1
+SQLRowCount ----- Number of Rows 5
+SQLGetData ----colname = ft
+SQLGetData ----colname = id
+SQLGetData ----colname = identi
+SQLGetData ----colname = omg
+SQLGetData ----colname = tm
+exit code : 0

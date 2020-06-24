@@ -1,0 +1,6 @@
+Connected !
+SQLNumResultCols ---- Number of Columns 3
+SQLRowCount ----- Number of Rows 1
+SQLBindCol ----- Result: 1  1990-08-28 00:00:00
+SQLGetData ----name = 
+exit code : 0

@@ -1,0 +1,9 @@
+**** Entering CLIP06.
+
+DATA_TYPE        ----: 93
+TYPE_NAME        ----: smalldatetime
+COLUMN_SIZE      ----: 16
+SQL_DATA_TYPE    ----: 9
+BUFFER_LENGTH    ----: 16
+CHAR_OCTET_LENGTH----: 16
+exit code : 0

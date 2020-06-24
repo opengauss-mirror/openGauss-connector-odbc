@@ -1,0 +1,10 @@
+**** Entering CLIP06.
+
+bengin sqlbindcol:bengin sqlFetch:
+DATA_TYPE--------------------------: 12
+TYPE_NAME--------------------------: nvarchar2
+COLUMN_SIZE(in characters)---------: 20
+SQL_DATA_TYPE----------------------: 12
+BUFFER_LENGTH(in bytes)------------: 80
+CHAR_OCTET_LENGTH(in bytes)--------: 80
+exit code : 0

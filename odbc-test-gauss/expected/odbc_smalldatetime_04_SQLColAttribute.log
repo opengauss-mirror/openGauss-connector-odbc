@@ -1,0 +1,22 @@
+**** Entering CLIP06.
+
+SQL_COLUMN_AUTO_INCREMENT----smalldatetime: 0
+SQL_COLUMN_CASE_SENSITIVE----smalldatetime: 0
+SQL_COLUMN_SEARCHABLE----smalldatetime : 2 
+SQL_DESC_UNSIGNED----smalldatetime(true): 1
+SQL_DESC_TYPE_NAME----: smalldatetime
+SQL_DESC_LOCAL_TYPE_NAME----: smalldatetime
+SQL_DESC_TYPE----: 9 93
+SQL_DESC_LENGTH----smalldatetime: 16
+SQL_DESC_NAME----ID: tm
+SQL_DESC_OCTET_LENGTH----: 16
+SQL_COLUMN_DISPLAY_SIZE----: 16
+SQL_DESC_PRECISION----smalldatetime: 0
+SQL_DESC_PRECISION----: 0
+SQL_DESC_SCALE---- 0
+SQL_DESC_SCALE---- -1
+SQL_DESC_LITERAL_PREFIX----: '
+SQL_DESC_LITERAL_SUFFIX----: '
+SQL_DESC_CATALOG_NAME----PG_CATALOG: odbc
+SQL_DESC_TABLE_NAME----: odbc_smalldatetime_04_sqlcolattribute
+exit code : 0
