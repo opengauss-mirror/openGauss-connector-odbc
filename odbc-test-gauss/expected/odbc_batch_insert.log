@@ -1,0 +1,79 @@
+connected
+OK:	SQLSetConnectAttr(SQL_ATTR_AUTOCOMMIT)
+OK:	SQLAllocHandle(SQL_HANDLE_STMT)
+OK:	SQLPrepare log: drop table if exists test_odbc_batch_insert
+OK:	SQLExecute stmt log: drop table if exists test_odbc_batch_insert
+OK:	SQLFreeHandle stmt log: drop table if exists test_odbc_batch_insert
+OK:	SQLAllocHandle(SQL_HANDLE_STMT)
+OK:	SQLPrepare log: create table test_odbc_batch_insert(id int primary key, col varchar2(50))
+OK:	SQLExecute stmt log: create table test_odbc_batch_insert(id int primary key, col varchar2(50))
+OK:	SQLFreeHandle stmt log: create table test_odbc_batch_insert(id int primary key, col varchar2(50))
+OK:	SQLAllocHandle(SQL_HANDLE_STMT)
+OK:	SQLPrepare log: insert into test_odbc_batch_insert values(?, ?)
+OK:	SQLSetStmtAttr
+OK:	SQLBindParameter for id
+OK:	SQLBindParameter for cols
+OK:	SQLSetStmtAttr for SQL_ATTR_PARAMS_PROCESSED_PTR
+OK:	SQLSetStmtAttr for SQL_ATTR_PARAM_STATUS_PTR
+OK:	SQLSetStmtAttr for SQL_ATTR_PARAM_OPERATION_PTR
+OK:	SQLExecute stmt log: insert into test_odbc_batch_insert values(?, ?)
+OK:	SQLRowCount execution
+OK:	(batchCount - ignoreCount)(6997) == rowsCount(6997)
+OK:	process(6997) == rowsCount(6997)
+OK:	SQLFreeHandle hstmtinesrt
+
+Complete.
+disconnecting
+connected
+OK:	SQLSetConnectAttr(SQL_ATTR_AUTOCOMMIT)
+OK:	SQLAllocHandle(SQL_HANDLE_STMT)
+OK:	SQLPrepare log: drop table if exists test_odbc_batch_insert
+OK:	SQLExecute stmt log: drop table if exists test_odbc_batch_insert
+OK:	SQLFreeHandle stmt log: drop table if exists test_odbc_batch_insert
+OK:	SQLAllocHandle(SQL_HANDLE_STMT)
+OK:	SQLPrepare log: create table test_odbc_batch_insert(id int primary key, col varchar2(50))
+OK:	SQLExecute stmt log: create table test_odbc_batch_insert(id int primary key, col varchar2(50))
+OK:	SQLFreeHandle stmt log: create table test_odbc_batch_insert(id int primary key, col varchar2(50))
+OK:	SQLAllocHandle(SQL_HANDLE_STMT)
+OK:	SQLPrepare log: insert into test_odbc_batch_insert values(?, ?)
+OK:	SQLSetStmtAttr
+OK:	SQLBindParameter for id
+OK:	SQLBindParameter for cols
+OK:	SQLSetStmtAttr for SQL_ATTR_PARAMS_PROCESSED_PTR
+OK:	SQLSetStmtAttr for SQL_ATTR_PARAM_STATUS_PTR
+OK:	SQLSetStmtAttr for SQL_ATTR_PARAM_OPERATION_PTR
+OK:	SQLExecute stmt log: insert into test_odbc_batch_insert values(?, ?)
+OK:	SQLRowCount execution
+OK:	(batchCount - ignoreCount)(7) == rowsCount(7)
+OK:	process(7) == rowsCount(7)
+OK:	SQLFreeHandle hstmtinesrt
+
+Complete.
+disconnecting
+connected
+OK:	SQLSetConnectAttr(SQL_ATTR_AUTOCOMMIT)
+OK:	SQLAllocHandle(SQL_HANDLE_STMT)
+OK:	SQLPrepare log: drop table if exists test_odbc_batch_insert
+OK:	SQLExecute stmt log: drop table if exists test_odbc_batch_insert
+OK:	SQLFreeHandle stmt log: drop table if exists test_odbc_batch_insert
+OK:	SQLAllocHandle(SQL_HANDLE_STMT)
+OK:	SQLPrepare log: create table test_odbc_batch_insert(id int primary key, col varchar2(50))
+OK:	SQLExecute stmt log: create table test_odbc_batch_insert(id int primary key, col varchar2(50))
+OK:	SQLFreeHandle stmt log: create table test_odbc_batch_insert(id int primary key, col varchar2(50))
+OK:	SQLAllocHandle(SQL_HANDLE_STMT)
+OK:	SQLPrepare log: insert into test_odbc_batch_insert values(?, ?)
+OK:	SQLSetStmtAttr
+OK:	SQLBindParameter for id
+OK:	SQLBindParameter for cols
+OK:	SQLSetStmtAttr for SQL_ATTR_PARAMS_PROCESSED_PTR
+OK:	SQLSetStmtAttr for SQL_ATTR_PARAM_STATUS_PTR
+OK:	SQLSetStmtAttr for SQL_ATTR_PARAM_OPERATION_PTR
+OK:	SQLExecute stmt log: insert into test_odbc_batch_insert values(?, ?)
+OK:	SQLRowCount execution
+OK:	(batchCount - ignoreCount)(0) == rowsCount(0)
+OK:	process(0) == rowsCount(0)
+OK:	SQLFreeHandle hstmtinesrt
+
+Complete.
+disconnecting
+exit code : 0

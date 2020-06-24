@@ -1,0 +1,14 @@
+Connected !
+Typename---------nvarchar2: nvarchar2
+CaseSensitive----nvarchar2: 1
+Searchable-------nvarchar2: 3
+Columnlen--------nvarchar2: 80
+Maxdpsize--------nvarchar2: 20
+Desctype---------nvarchar2: 12
+Columntype-------nvarchar2: 12
+DescOclen--------nvarchar2: 80
+DescTypeName-----nvarchar2: nvarchar2
+UNSIGNED---------nvarchar2: 1
+SQLNumResultCols----------: 2
+SQLRowCount---------------: 1
+exit code : 0

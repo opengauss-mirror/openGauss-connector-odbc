@@ -1,0 +1,14 @@
+**** Entering CLIP06.
+
+TYPENAME              = int4 
+DATA_TYPE             = 4 SQL_TINYINT=-6 
+COLUMN_SIZE           = 10 
+MINIMUM_SCALE         = 0 
+MAXIMUM_SCALE         = 0 
+NUM_PREC_RADIX        = 10 
+LOCAL_TYPE_NAME       =  
+LITERAL_PREFIX        =  
+LITERAL_SUFFIX        =  
+**** Exiting  CLIP06.
+
+exit code : 0

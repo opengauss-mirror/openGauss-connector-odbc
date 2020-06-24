@@ -1,0 +1,6 @@
+Connected !
+ERROR: canceling statement due to statement timeout (110)
+ERROR: syntax error at or near "int" (110)
+ERROR: syntax error at or near "int" (110)
+GO ON!
+exit code : 0

@@ -1,0 +1,6 @@
+Connected Successfuly!
+SQLNumResultCols ---- Number of Columns 1
+SQLRowCount ----- Number of Rows 1
+SQLBindCol ----- Result: you are the best!
+SQLGetData ----name = you are the best!
+exit code : 0

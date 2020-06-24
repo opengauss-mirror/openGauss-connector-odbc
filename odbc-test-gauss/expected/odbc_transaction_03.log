@@ -1,0 +1,5 @@
+Connected !
+ERROR: SAVEPOINT in function/procedure is not yet supported. (110)
+SQLNumResultCols ---- Number of Columns 1
+SQLRowCount ----- Number of Rows 0
+exit code : 0

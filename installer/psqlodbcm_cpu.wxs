@@ -1,0 +1,69 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+<?ifdef var.Platform ?>
+<?define ModuleName = "psqlODBC_$(var.Platform)" ?>
+<?if $(var.Platform) = x64 ?>
+<?define BIT64 = "yes" ?>
+<?define ANSIFOLDER = "AMD64ANSI" ?>
+<?define UNICODEFOLDER = "AMD64" ?>
+<?define Module_PackageId = "970B6E07-7105-4d66-80FA-9E208952FB96" ?>
+<?define CIDPFILES = "5C9A19B5-D7C6-4bb4-BBBC-88C2A67A59B0" ?>
+<?else?>
+<?define BIT64 = "no" ?>
+<?define ANSIFOLDER = "MultibyteRelease" ?>
+<?define UNICODEFOLDER = "Release" ?>
+<?define Module_PackageId = "ACF10866-5C01-46f0-90F0-D5618638CA4A" ?>
+<?define CIDPFILES = "00A1ACE3-B7C2-41b8-A1F1-DB565990DA50" ?>
+<?endif?>
+<?else?>
+<?define BIT64 = "no" ?>
+<?define Platform = "x86" ?>
+<?define ModuleName = "psqlODBC" ?>
+<?define ANSIFOLDER = "MultibyteRelease" ?>
+<?define UNICODEFOLDER = "Release" ?>
+<?define Module_PackageId = "ACF10866-5C01-46f0-90F0-D5618638CA48" ?>
+<?define CIDPFILES = "00A1ACE3-B7C2-41b8-A1F1-DB565990DA4E" ?>
+<?endif?>
+
+  <Module
+    Id="$(var.ModuleName)"
+    Version="$(var.VERSION)"
+    Language="1033">
+    
+    <Package 
+      Id="$(var.Module_PackageId)"
+      Description="PostgreSQL ODBC Driver"
+      Keywords="PostgreSQL, ODBC"
+      Manufacturer="PostgreSQL Global Development Group" 
+      InstallerVersion="300"
+      Platform="$(var.Platform)" 
+      Languages="1033"
+      SummaryCodepage="1252" />
+
+    <Directory Id="TARGETDIR" Name="SourceDir">
+      <Directory Id="BINDIR" Name=".">
+        <Component Id="psqlodbc.files" Guid="$(var.CIDPFILES)" Win64="$(var.BIT64)">
+          <File Id="psqlodbc35w.dll" Name="psqlodbc35w.dll" Source="../Release-x64/psqlodbc35w.dll" >
+	    <ODBCDriver Id="Psqlodbc_9.0_Driver" Name="PostgreSQL Unicode($(var.Platform))" />
+	  </File>
+          <File Id="libpq.dll" Name="libpq.dll" Source="../../Code/Release/libpq/libpq.dll" KeyPath="yes" />
+          <File Id="MSVCR100.DLL" Name="MSVCR100.DLL" Source="x64/MSVCR100.DLL" KeyPath="no" />
+          <File Id="MSVCR100D.DLL" Name="MSVCR100D.DLL" Source="x64/MSVCR100D.DLL" KeyPath="no" />
+          <!-- Note, installing the driver properly (IE, using ODBCDriver) has proven unreliable -->
+          <!--       so we install the registry keys manually ourselves.                         -->
+
+          <RegistryValue Id="psqlodbc35w.reg.1" Root="HKLM" Key="SOFTWARE\ODBC\ODBCINST.INI\ODBC Drivers" Name="PostgreSQL Unicode($(var.Platform))" Type="string" Value="Installed" />
+          <RegistryValue Id="psqlodbc35w.reg.2" Root="HKLM" Key="SOFTWARE\ODBC\ODBCINST.INI\PostgreSQL Unicode" Name="APILevel" Type="string" Value="1" />
+          <RegistryValue Id="psqlodbc35w.reg.3" Root="HKLM" Key="SOFTWARE\ODBC\ODBCINST.INI\PostgreSQL Unicode" Name="ConnectFunctions" Type="string" Value="YYN" />
+          <RegistryValue Id="psqlodbc35w.reg.4" Root="HKLM" Key="SOFTWARE\ODBC\ODBCINST.INI\PostgreSQL Unicode" Name="Driver" Type="string" Value="[#psqlodbc35w.dll]" />
+          <RegistryValue Id="psqlodbc35w.reg.5" Root="HKLM" Key="SOFTWARE\ODBC\ODBCINST.INI\PostgreSQL Unicode" Name="DriverODBCVer" Type="string" Value="03.51" />
+          <RegistryValue Id="psqlodbc35w.reg.6" Root="HKLM" Key="SOFTWARE\ODBC\ODBCINST.INI\PostgreSQL Unicode" Name="FileUsage" Type="string" Value="0" />
+          <RegistryValue Id="psqlodbc35w.reg.7" Root="HKLM" Key="SOFTWARE\ODBC\ODBCINST.INI\PostgreSQL Unicode" Name="Setup" Type="string" Value="[#psqlodbc35w.dll]" />
+          <RegistryValue Id="psqlodbc35w.reg.8" Root="HKLM" Key="SOFTWARE\ODBC\ODBCINST.INI\PostgreSQL Unicode" Name="SQLLevel" Type="string" Value="1" />
+          <RegistryValue Id="psqlodbc35w.reg.9" Root="HKLM" Key="SOFTWARE\ODBC\ODBCINST.INI\PostgreSQL Unicode" Name="UsageCount" Type="integer" Value="1" />
+        </Component>
+      </Directory>
+    </Directory>
+
+  </Module>
+</Wix>

@@ -1,0 +1,18 @@
+**** Entering CLIP06.
+
+**** begin fetch  variable.
+PROCEDURE NAME        ----: odbc_smalldatetime_07
+DATA_TYPE        ----: 93 SQL_TYPE_TIMESTAMP = 93 
+TYPE_NAME        ----: smalldatetime
+COLUMN_SIZE      ----: 16
+SQL_DATA_TYPE    ----: 9
+BUFFER_LENGTH    ----: 16
+CHAR_OCTET_LENGTH----: 16
+PROCEDURE NAME        ----: odbc_smalldatetime_07
+DATA_TYPE        ----: 93 SQL_TYPE_TIMESTAMP = 93 
+TYPE_NAME        ----: smalldatetime
+COLUMN_SIZE      ----: 16
+SQL_DATA_TYPE    ----: 9
+BUFFER_LENGTH    ----: 16
+CHAR_OCTET_LENGTH----: 16
+exit code : 0

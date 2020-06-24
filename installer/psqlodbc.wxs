@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+  
+<!-- Product details -->
+
+  <Product 
+    Manufacturer="PostgreSQL Global Development Group" 
+    Id="838E187D-8B7A-473d-B93C-C8E970B15D2B"
+    UpgradeCode="24BCA538-75A2-4a7f-B236-C99EFC2145DE"
+    Name="psqlODBC"
+    Version="$(var.VERSION)" 
+    Language="1033">
+
+<!-- Package details -->
+
+    <Package
+      Keywords="PostgreSQL, ODBC"
+      Comments="PostgreSQL ODBC Driver"
+      Manufacturer="PostgreSQL Global Development Group" 
+      InstallerVersion="300"
+      Languages="1033" 
+      Compressed="yes" 
+      SummaryCodepage="1252" />
+
+<!-- Directories -->
+
+    <Directory Id="TARGETDIR" Name="SourceDir">
+
+          <Directory Id="ProgramFilesFolder" Name="PFiles">
+            <Directory Id="BASEDIR" Name="psqlODBC">
+              <Component Id="registration" Guid="4F0C04EB-ADCB-4fa8-B6A3-E9F74EA693F8">
+                <RegistryValue KeyPath="yes" Type="string" Root="HKLM" Key="Software\psqlODBC" Name="Version" Value="$(var.VERSION)" />
+              </Component>
+              <Merge Id="psqlodbcm" DiskId="1" Language="1033" SourceFile="psqlodbc.msm" />
+            </Directory>
+      </Directory>
+      <Directory Id="ProgramMenuFolder" Name="." SourceName="Programs">
+      </Directory>
+    </Directory>
+
+<!-- Features -->
+
+    <Feature Id="psqlodbc" Title="psqlODBC" Level="1" Description="psqlODBC - The PostgreSQL ODBC Driver" ConfigurableDirectory="BASEDIR" Display="expand">
+      <Feature Id="binaries" Title="ODBC Driver" Level="1" Description="The ODBC driver and supporting libraries.">
+        <ComponentRef Id="registration" />
+        <MergeRef Id="psqlodbcm" />
+      </Feature>
+
+    </Feature>
+    <Media Id="1" EmbedCab="yes" Cabinet="psqlodbc.cab"/>
+
+<!-- Properties -->
+
+    <Property Id="ALLUSERS">2</Property>
+    <Property Id="WIXUI_INSTALLDIR" Value="BASEDIR" />
+
+<!-- UI -->
+
+     <UIRef Id="WixUI_FeatureTree" />
+     <WixVariable Id="WixUILicenseRtf" Value="lgpl.rtf" />
+     <WixVariable Id="WixUIDialogBmp" Value="background.bmp" />
+     <WixVariable Id="WixUIBannerBmp" Value="banner.bmp" />
+
+  </Product>
+</Wix>

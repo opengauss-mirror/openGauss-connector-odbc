@@ -1,0 +1,4 @@
+tar xzf unixODBC-2.3.6
+sh build.sh -m build
+sh build.sh -m shrink
+sh build.sh -m dist

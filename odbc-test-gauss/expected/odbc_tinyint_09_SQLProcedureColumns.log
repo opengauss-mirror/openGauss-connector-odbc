@@ -1,0 +1,10 @@
+**** Entering CLIP06.
+
+**** begin fetch  variable.
+**** Procedure Name = odbc_tinyint_09
+ Parameter  is UNKNOWN. Data Type is -6
+ Type Name is int1.
+**** Procedure Name = odbc_tinyint_09
+ Parameter firstid is INPUT. Data Type is -6
+ Type Name is int1.
+exit code : 0

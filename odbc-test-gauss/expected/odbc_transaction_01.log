@@ -1,0 +1,6 @@
+Connected !
+SQLNumResultCols ---- Number of Columns 1
+SQLRowCount ----- Number of Rows 1
+SQLBindCol ----- Result: haha
+ERROR: relation "odbc_transaction_01" does not exist (110)
+exit code : 0
