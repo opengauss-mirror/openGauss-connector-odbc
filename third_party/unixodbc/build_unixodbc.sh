@@ -85,9 +85,6 @@ INSTALL_COMPOENT_PATH_NAME="${ROOT_DIR}/${COMPONENT_TYPE}/${COMPONENT_NAME}"
 function build_component()
 {
         cd ${LOCAL_DIR}
-	rm -rf ${TAR_FILE_NAME%.tar.gz}
-	rm -rf ${TAR_FILE_NAME}
-	cp ${TAR_FILE_NAME%.tar.gz}.file ${TAR_FILE_NAME}
         tar -xvf ${TAR_FILE_NAME}
 	
 	cd ${LOCAL_DIR}/${SOURCE_CODE_PATH}

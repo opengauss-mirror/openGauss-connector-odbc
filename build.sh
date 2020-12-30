@@ -51,8 +51,7 @@ NOTICE_FILE='Copyright Notice.doc'
 plat=$(uname -p)
 if [ x$kernel$version$plat != x"eulerossp5x86_64" ] && [ x$kernel$version$plat != x"eulerossp8aarch64" ] && [ x$kernel$version$plat != x"eulerossp2x86_64" ]
 then
-    echo "Only support to build unixODBC on EulerOS_SP5_x86_64 and EulerOS_SP8_aarch64"
-    exit 1
+    echo "WARN: Building unixODBC platform other than EulerOS_SP5_x86_64 and EulerOS_SP8_aarch64 is experimental"
 fi
 
 
