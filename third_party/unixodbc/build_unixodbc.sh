@@ -1,5 +1,12 @@
 #!/bin/bash
-# description: the script that make install unixODBC
+#######################################################################
+# Copyright (c): 2020-2025, Huawei Tech. Co., Ltd.
+# descript: Compile and pack MPPDB
+#           Return 0 means OK.
+#           Return 1 means failed.
+# version:  2.0
+# date:     2020-08-09
+#######################################################################
 
 ######################################################################
 # Parameter setting
@@ -15,8 +22,8 @@ fi
 LOCAL_DIR=$(dirname "${LOCAL_PATH}")
 CONFIG_FILE_NAME=config.ini
 BUILD_OPTION=release 
-TAR_FILE_NAME=unixODBC-2.3.6.tar.gz
-SOURCE_CODE_PATH=unixODBC-2.3.6
+TAR_FILE_NAME=unixODBC-2.3.9.tar.gz
+SOURCE_CODE_PATH=unixODBC-2.3.9
 LOG_FILE=${LOCAL_DIR}/build_unixODBC.log
 BUILD_FAILED=1
 
@@ -78,13 +85,21 @@ INSTALL_COMPOENT_PATH_NAME="${ROOT_DIR}/${COMPONENT_TYPE}/${COMPONENT_NAME}"
 function build_component()
 {
         cd ${LOCAL_DIR}
+	rm -rf ${TAR_FILE_NAME%.tar.gz}
+	rm -rf ${TAR_FILE_NAME}
+	cp ${TAR_FILE_NAME%.tar.gz}.file ${TAR_FILE_NAME}
         tar -xvf ${TAR_FILE_NAME}
 	
 	cd ${LOCAL_DIR}/${SOURCE_CODE_PATH}
 	if [ $? -ne 0 ]; then
                 die "[Error] change dir to $SRC_DIR failed."
         fi
-	
+
+	log "[Notice] start autoreconf."
+	autoreconf -fi
+	if [ $? -ne 0 ]; then
+		die "[Error] autoreconf failed, please install libtool and libtool-ltdl-devel."
+	fi
 	chmod +x configure       
 	for COMPILE_TYPE in ${COMPLIE_TYPE_LIST}
 	do
@@ -96,9 +111,9 @@ function build_component()
 				die "[Error] unixODBC not supported build type."
 				;;
                 	comm)	
-				mkdir -p ${LOCAL_DIR}/install_comm/unixODBC-2.3.6
-                                log "[Notice] unixODBC configure string: ./configure CFLAGS='-fstack-protector-all -Wl,-z,relro,-z,now -Wl,-z,noexecstack -fPIC' --enable-gui=no --prefix=${LOCAL_DIR}/install_comm"
-                                ./configure CFLAGS='-fstack-protector-all -Wl,-z,relro,-z,now -Wl,-z,noexecstack -fPIC' --enable-gui=no --prefix=${LOCAL_DIR}/install_comm/unixODBC-2.3.6
+				mkdir -p ${LOCAL_DIR}/install_comm/unixODBC-2.3.9
+                                log "[Notice] unixODBC configure string: ./configure CFLAGS='-fstack-protector-all -Wl,-z,relro,-z,now -Wl,-z,noexecstack -fPIC -fPIE -pie' --enable-gui=no --prefix=${LOCAL_DIR}/install_comm"
+                                ./configure CFLAGS='-fstack-protector-all -Wl,-z,relro,-z,now -Wl,-z,noexecstack -fPIC -fPIE -pie' --enable-gui=no --prefix=${LOCAL_DIR}/install_comm/unixODBC-2.3.9
                         	;;
 			release_llt)
 				die "[Error] unixODBC not supported build type."
@@ -119,8 +134,21 @@ function build_component()
                         die "[Error] unixODBC configure failed."
                 fi
                 log "[Notice] unixODBC End configure"
+		
+                log "[Notice] disable rpath"
 
-                log "[Notice] unixODBC using \"${COMPILE_TYPE}\" Begin make"
+	        sed -i 's/runpath_var=LD_RUN_PATH/runpath_var=""/g' ./libtool
+        	sed -i 's/hardcode_libdir_flag_spec="\\\${wl}-rpath \\\${wl}\\\$libdir"/hardcode_libdir_flag_spec=""/g' ./libtool
+
+        	PLAT_FORM_STR=`uname -p`
+
+        	if [ "${PLAT_FORM_STR}"X = "aarch64"X ]
+       		then
+			sed -i "250c runpath_var=" libtool
+                	sed -i "385c hardcode_libdir_flag_spec=" libtool
+        	fi
+ 
+		log "[Notice] unixODBC using \"${COMPILE_TYPE}\" Begin make"
                 make -sj
                 if [ $? -ne 0 ]; then
                         die "unixODBC make failed."
