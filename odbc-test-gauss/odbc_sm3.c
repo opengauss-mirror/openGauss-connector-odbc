@@ -1,6 +1,9 @@
 /*
-测试sm3链接
-test: 远程链接配置里面默认配的都是sm3方式
+测试条件：
+1.在postgresql.conf配置文件中，将password_encryption_type设置为3。（加密方式改为SM3加密）
+2.在pg_hba配置文件中，将测试用户的加密方式改为sm3。
+
+目的：测试在加密方式为sm3的情况下ODBC可以正常连接使用。
 */
 #include <stdio.h>
 #include <sql.h>
