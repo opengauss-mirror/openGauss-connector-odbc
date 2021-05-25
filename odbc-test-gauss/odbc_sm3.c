@@ -28,6 +28,21 @@ char *buf = "Mike";
 char *buf1 = "haha";
 int value = 3;
 
+static inline void SM3SQLFreeHandle()
+{
+    SQLFreeHandle(SQL_HANDLE_STMT,V_OD_hstmt);
+    SQLFreeHandle(SQL_HANDLE_DBC,V_OD_hdbc);
+    SQLFreeHandle(SQL_HANDLE_ENV, V_OD_Env);
+}
+
+static inline void SM3SQLFreeHandleAndFreeConnect()
+{
+    SQLFreeHandle(SQL_HANDLE_STMT,V_OD_hstmt);
+    SQLDisconnect(V_OD_hdbc);
+    SQLFreeHandle(SQL_HANDLE_DBC,V_OD_hdbc);
+    SQLFreeHandle(SQL_HANDLE_ENV, V_OD_Env);
+}
+
 int main(int argc,char *argv[])
 {
 
@@ -95,9 +110,7 @@ int main(int argc,char *argv[])
        printf("Error in drop %d\n",V_OD_erg);
        SQLGetDiagRec(SQL_HANDLE_DBC, V_OD_hdbc,1, V_OD_stat,&V_OD_err,V_OD_msg,100,&V_OD_mlen);
        printf("%s (%d)\n",V_OD_msg,V_OD_err);
-       SQLFreeHandle(SQL_HANDLE_STMT,V_OD_hstmt);
-       SQLFreeHandle(SQL_HANDLE_DBC,V_OD_hdbc);
-       SQLFreeHandle(SQL_HANDLE_ENV, V_OD_Env);
+       SM3SQLFreeHandle();
        return -1;
     }
 	
@@ -108,9 +121,7 @@ int main(int argc,char *argv[])
        printf("Error in create %d\n",V_OD_erg);
        SQLGetDiagRec(SQL_HANDLE_DBC, V_OD_hdbc,1, V_OD_stat,&V_OD_err,V_OD_msg,100,&V_OD_mlen);
        printf("%s (%d)\n",V_OD_msg,V_OD_err);
-       SQLFreeHandle(SQL_HANDLE_STMT,V_OD_hstmt);
-       SQLFreeHandle(SQL_HANDLE_DBC,V_OD_hdbc);
-       SQLFreeHandle(SQL_HANDLE_ENV, V_OD_Env);
+       SM3SQLFreeHandle();
        return -1;
     }
 		
@@ -123,9 +134,7 @@ int main(int argc,char *argv[])
        printf("Error in Select %d\n",V_OD_erg);
        SQLGetDiagRec(SQL_HANDLE_DBC, V_OD_hdbc,1, V_OD_stat,&V_OD_err,V_OD_msg,100,&V_OD_mlen);
        printf("%s (%d)\n",V_OD_msg,V_OD_err);
-       SQLFreeHandle(SQL_HANDLE_STMT,V_OD_hstmt);
-       SQLFreeHandle(SQL_HANDLE_DBC,V_OD_hdbc);
-       SQLFreeHandle(SQL_HANDLE_ENV, V_OD_Env);
+       SM3SQLFreeHandle();
        return -1;
     }
 	
@@ -133,10 +142,7 @@ int main(int argc,char *argv[])
     V_OD_erg=SQLNumResultCols(V_OD_hstmt,&V_OD_colanz);
     if ((V_OD_erg != SQL_SUCCESS) && (V_OD_erg != SQL_SUCCESS_WITH_INFO))
     {
-        SQLFreeHandle(SQL_HANDLE_STMT,V_OD_hstmt);
-        SQLDisconnect(V_OD_hdbc);
-        SQLFreeHandle(SQL_HANDLE_DBC,V_OD_hdbc);
-        SQLFreeHandle(SQL_HANDLE_ENV, V_OD_Env);
+        SM3SQLFreeHandleAndFreeConnect();
        return -1;
     }
     printf("SQLNumResultCols ---- Number of Columns %d\n",V_OD_colanz);
@@ -146,10 +152,7 @@ int main(int argc,char *argv[])
     if ((V_OD_erg != SQL_SUCCESS) && (V_OD_erg != SQL_SUCCESS_WITH_INFO))
     {
       printf("Number of RowCount %d\n",V_OD_erg);
-      SQLFreeHandle(SQL_HANDLE_STMT,V_OD_hstmt);
-      SQLDisconnect(V_OD_hdbc);
-      SQLFreeHandle(SQL_HANDLE_DBC,V_OD_hdbc);
-      SQLFreeHandle(SQL_HANDLE_ENV, V_OD_Env);
+      SM3SQLFreeHandleAndFreeConnect();
       return -1;
     }
     printf("SQLRowCount ----- Number of Rows %d\n",V_OD_rowanz);
@@ -165,10 +168,7 @@ int main(int argc,char *argv[])
     };
 
 	
-    SQLFreeHandle(SQL_HANDLE_STMT,V_OD_hstmt);
-    SQLDisconnect(V_OD_hdbc);
-    SQLFreeHandle(SQL_HANDLE_DBC,V_OD_hdbc);
-    SQLFreeHandle(SQL_HANDLE_ENV, V_OD_Env);
+    SM3SQLFreeHandleAndFreeConnect();
     return(0);
 }
 
