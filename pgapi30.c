@@ -398,6 +398,11 @@ PGAPI_GetConnectAttr(HDBC ConnectionHandle,
 	ConnectionClass *conn = (ConnectionClass *) ConnectionHandle;
 	RETCODE	ret = SQL_SUCCESS;
 	SQLINTEGER	len = 4;
+	
+	if (Value == NULL) {
+		CC_set_error(conn, CONN_VALUE_OUT_OF_RANGE, "Invalid Connection value", "PGAPI_GetConnectOption");
+		return SQL_ERROR;
+	}
 
 	MYLOG(0, "entering %d\n", Attribute);
 	switch (Attribute)

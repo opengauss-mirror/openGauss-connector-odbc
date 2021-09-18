@@ -12,10 +12,18 @@
 #undef	DLL_DECLARE
 #ifdef	WIN32
 #ifdef	_MYLOG_FUNCS_IMPLEMENT_
+#ifdef _MINGW32
+#define	DLL_DECLARE	__declspec(dllexport)
+#else
 #define	DLL_DECLARE	_declspec(dllexport)
+#endif
 #else
 #ifdef	_MYLOG_FUNCS_IMPORT_
+#ifdef _MINGW32
+#define	DLL_DECLARE	__declspec(dllimport)
+#else
 #define	DLL_DECLARE	_declspec(dllimport)
+#endif
 #else
 #define	DLL_DECLARE
 #endif /* _MYLOG_FUNCS_IMPORT_ */

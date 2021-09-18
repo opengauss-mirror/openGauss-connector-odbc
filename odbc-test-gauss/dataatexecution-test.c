@@ -3,7 +3,7 @@
 #include <string.h>
 
 #include "common.h"
-#define VOID void
+
 int main(int argc, char **argv)
 {
 	SQLRETURN rc;
