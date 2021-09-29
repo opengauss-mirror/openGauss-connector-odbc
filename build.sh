@@ -100,6 +100,14 @@ while [ $# -gt 0 ]; do
             serverlib_dir=$2
             shift 2
             ;;
+	-ud|--unixodbc_dir)
+            if [ "$2"X = X ]; then
+                echo "no given unixodbc directory values"
+                exit 1
+            fi
+            UNIX_ODBC=$2
+            shift 2
+            ;;
 
          *)
             echo "Internal Error: option processing error: $1" 1>&2  
@@ -131,7 +139,6 @@ SERVERLIBS_PATH="${serverlib_dir}"
 ##################################
 COMPLIE_TYPE="comm"
 echo "[makeodbc] $(date +%y-%m-%d' '%T): Work root dir : ${LOCAL_DIR}"
-UNIX_ODBC="${LOCAL_DIR}/third_party/unixodbc/install_comm/unixODBC-2.3.9"
 #######################################################################
 #  Print log.
 #######################################################################
@@ -169,10 +176,6 @@ function clean_environment()
 #######################################################################
 function install_odbc()
 {
-    echo "Begin make odbc..." >> "$LOG_FILE" 2>&1
-
-    cd ${LOCAL_DIR}/third_party/unixodbc/
-    sh ./build_unixodbc.sh -m build  >> "$LOG_FILE" 2>&1
     cd ${LOCAL_DIR}
 
     export GAUSSHOME=$SERVERLIBS_PATH
