@@ -121,11 +121,7 @@ extern const char *odbcVersionString;
 #define ULONG_PTR ULONG
 #define LONG_PTR LONG
 #define SetWindowLongPtr(hdlg, DWLP_USER, lParam) SetWindowLong(hdlg, DWLP_USER, lParam)
-#ifdef _MINGW32
-#define GetWindowLongPtr(hdlg, DWLP_USER) GetWindowLong(hdlg, DWLP_USER)
-#else
 #define GetWindowLongPtr(hdlg, DWLP_USER) GetWindowLong(hdlg, DWLP_USER);
-#endif
 #endif
 #else
 #include "iodbc.h"

@@ -5108,7 +5108,7 @@ MYLOG(0, "atttypid=%s\n", atttypid ? atttypid : "(null)");
 				params = QR_get_value_backend_text(tres, i, ext_pos + 2);
 				if ('{' == *proargmodes)
 					proargmodes++;
-				if (params != NULL && '{' == *params)
+				if ('{' == *params)
 					params++;
 			}
 			else

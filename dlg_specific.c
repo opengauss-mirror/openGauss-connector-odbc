@@ -862,7 +862,6 @@ static void Global_defset(GLOBAL_VALUES *comval)
 	comval->bools_as_char = DEFAULT_BOOLSASCHAR;
 	STRCPY_FIXED(comval->extra_systable_prefixes, DEFAULT_EXTRASYSTABLEPREFIXES);
 	STRCPY_FIXED(comval->protocol, DEFAULT_PROTOCOL);
-	comval->for_extension_connector = DEFAULT_FOREXTENSIONCONNECTOR;
 }
 
 static void

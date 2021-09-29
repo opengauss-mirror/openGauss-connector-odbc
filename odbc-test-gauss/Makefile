@@ -25,6 +25,7 @@ ifndef cases
 		odbc_nvarchar2_10_manycol \
 		odbc_nvarchar2_11_out \
 		odbc_sha256 \
+		odbc_sm3 \
 		odbc_smalldatetime_01_SQLPrimaryKeys \
 		odbc_smalldatetime_02_SQLColumn \
 		odbc_smalldatetime_03_SQLBindParameter \
@@ -79,14 +80,13 @@ ifndef cases
 		cvtnulldate-test \
 		stmthandles-test \
 		odbc_batch_insert \
-		odbc_connection_info \
 		odbc_DTS2019070108437 \
 		odbc_transaction_for_extension_connector \
 		odbc_DTS2019071815351
 endif
 
 
-all: $(cases)
+all:$(deps) $(cases)
 
 %: %.c
 	$(CC) -l odbc -O0 -g -o $@ $< $(deps)
