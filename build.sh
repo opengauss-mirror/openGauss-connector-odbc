@@ -29,9 +29,6 @@ elif [ -f "/etc/openEuler-release" ]; then
 elif [ -f "/etc/centos-release" ]; then
     kernel=$(cat /etc/centos-release | awk -F ' ' '{print $1}' | tr A-Z a-z)
     version=$(cat /etc/centos-release | awk -F '(' '{print $2}'| awk -F ')' '{print $1}' | tr A-Z a-z)
-elif [ -f "/etc/kylin-release" ]; then
-    kernel=$(cat /etc/kylin-release | awk -F ' ' '{print $1}' | tr A-Z a-z)
-    version=$(cat /etc/kylin-release | awk '{print $6}' | tr A-Z a-z)
 else
     kernel=$(lsb_release -d | awk -F ' ' '{print $2}'| tr A-Z a-z)
     version=$(lsb_release -r | awk -F ' ' '{print $2}')
@@ -43,20 +40,25 @@ elif [ X"$kernel" == X"centos" ]; then
     dist_version="CENTOS"
 elif [ X"$kernel" == X"openeuler" ]; then 
     dist_version="OPENEULER"
-elif [ X"$kernel" == X"kylin" ]; then
-    dist_version="KYLIN"
 else
     echo "We only support EulerOS, OPENEULER(aarch64) and CentOS platform."
     echo "Kernel is $kernel"
     exit 1
 fi
 
-NOTICE_FILE='Copyright Notice.docx'
+NOTICE_FILE='Copyright Notice.doc'
+
+plat=$(uname -p)
+if [ x$kernel$version$plat != x"eulerossp5x86_64" ] && [ x$kernel$version$plat != x"eulerossp8aarch64" ] && [ x$kernel$version$plat != x"eulerossp2x86_64" ]
+then
+    echo "WARN: Building unixODBC platform other than EulerOS_SP5_x86_64 and EulerOS_SP8_aarch64 is experimental"
+fi
+
 
 ##default install version storage path
 declare mppdb_version='GaussDB Kernel'
 declare mppdb_name_for_package="$(echo ${mppdb_version} | sed 's/ /-/g')"
-declare version_number='V500R002C00'
+declare version_number='V500R001C20'
 #######################################################################
 ## print help information
 #######################################################################
@@ -100,15 +102,6 @@ while [ $# -gt 0 ]; do
             serverlib_dir=$2
             shift 2
             ;;
-	-ud|--unixodbc_dir)
-            if [ "$2"X = X ]; then
-                echo "no given unixodbc directory values"
-                exit 1
-            fi
-            UNIX_ODBC=$2
-            shift 2
-            ;;
-
          *)
             echo "Internal Error: option processing error: $1" 1>&2  
             echo "please input right paramtenter, the following command may help you"
@@ -139,6 +132,7 @@ SERVERLIBS_PATH="${serverlib_dir}"
 ##################################
 COMPLIE_TYPE="comm"
 echo "[makeodbc] $(date +%y-%m-%d' '%T): Work root dir : ${LOCAL_DIR}"
+UNIX_ODBC="${LOCAL_DIR}/third_party/unixodbc/install_comm/unixODBC-2.3.9"
 #######################################################################
 #  Print log.
 #######################################################################
@@ -176,6 +170,10 @@ function clean_environment()
 #######################################################################
 function install_odbc()
 {
+    echo "Begin make odbc..." >> "$LOG_FILE" 2>&1
+
+    cd ${LOCAL_DIR}/third_party/unixodbc/
+    sh ./build_unixodbc.sh -m build  >> "$LOG_FILE" 2>&1
     cd ${LOCAL_DIR}
 
     export GAUSSHOME=$SERVERLIBS_PATH
@@ -244,7 +242,7 @@ function target_file_copy()
     cp $SERVERLIBS_PATH/lib/libpgport_tool* ${BUILD_DIR}/lib
     cp $SERVERLIBS_PATH/lib/libcom_err_gauss* ${BUILD_DIR}/lib
 
-    cp $UNIX_ODBC/lib/libodb* ${BUILD_DIR}/lib
+    cp $LOCAL_DIR/third_party/unixodbc/install_comm/unixODBC-2.3.9/lib/libodbcinst* ${BUILD_DIR}/lib
 }
 
 #######################################################################
