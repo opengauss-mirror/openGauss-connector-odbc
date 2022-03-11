@@ -121,7 +121,11 @@ extern const char *odbcVersionString;
 #define ULONG_PTR ULONG
 #define LONG_PTR LONG
 #define SetWindowLongPtr(hdlg, DWLP_USER, lParam) SetWindowLong(hdlg, DWLP_USER, lParam)
+#ifdef _MINGW32
+#define GetWindowLongPtr(hdlg, DWLP_USER) GetWindowLong(hdlg, DWLP_USER)
+#else
 #define GetWindowLongPtr(hdlg, DWLP_USER) GetWindowLong(hdlg, DWLP_USER);
+#endif
 #endif
 #else
 #include "iodbc.h"
@@ -604,11 +608,11 @@ typedef struct
 	char		dsn[MEDIUM_REGISTRY_LEN];
 	char		desc[MEDIUM_REGISTRY_LEN];
 	char		drivername[MEDIUM_REGISTRY_LEN];
-	char		server[MEDIUM_REGISTRY_LEN];
+	char		server[LARGE_REGISTRY_LEN];
 	char		database[MEDIUM_REGISTRY_LEN];
 	char		username[MEDIUM_REGISTRY_LEN];
 	pgNAME		password;
-	char		port[SMALL_REGISTRY_LEN];
+	char		port[LARGE_REGISTRY_LEN];
 	char		sslmode[16];
 	char		onlyread[SMALL_REGISTRY_LEN];
 	char		fake_oid_index[SMALL_REGISTRY_LEN];
@@ -665,6 +669,9 @@ typedef struct
 	signed char	xa_opt;
 #endif /* _HANDLE_ENLIST_IN_DTC_ */
 	GLOBAL_VALUES drivers;		/* moved from driver's option */
+	Int4		autobalance;	/* whether use autobalance */
+	Int4		refreshcnlisttime;	/* how long to refresh the IP_list */
+	Int4		priority;
 } ConnInfo;
 
 #define SUPPORT_DESCRIBE_PARAM(conninfo_) (conninfo_->use_server_side_prepare)

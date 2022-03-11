@@ -72,6 +72,20 @@ SetDlgStuff(HWND hdlg, const ConnInfo *ci)
 	SetDlgItemText(hdlg, IDC_PASSWORD, SAFE_NAME(ci->password));
 	SetDlgItemText(hdlg, IDC_PORT, ci->port);
 
+	char buf[128];
+	if (ci->autobalance > 0) {
+		ITOA_FIXED(buf, ci->autobalance);
+		SetDlgItemText(hdlg, IDC_AB, buf);
+	}
+	if (ci->refreshcnlisttime > 0) {
+		ITOA_FIXED(buf, ci->refreshcnlisttime);
+		SetDlgItemText(hdlg, IDC_RT, buf);
+	}
+	if (ci->priority > 0) {
+		ITOA_FIXED(buf, ci->priority);
+		SetDlgItemText(hdlg, IDC_PR, buf);
+	}
+
 	dsplevel = 0;
 
 	/*
@@ -124,6 +138,21 @@ GetDlgStuff(HWND hdlg, ConnInfo *ci)
 	GetDlgItemText(hdlg, IDC_PORT, ci->port, sizeof(ci->port));
 	sslposition = (int)(DWORD)SendMessage(GetDlgItem(hdlg, IDC_SSLMODE), CB_GETCURSEL, 0L, 0L);
 	STRCPY_FIXED(ci->sslmode, modetab[sslposition].modestr);
+
+	char temp[64];
+	int	val;
+
+	GetDlgItemText(hdlg, IDC_AB, temp, sizeof(temp));
+	val = atoi(temp);
+	ci->autobalance = val;
+
+	GetDlgItemText(hdlg, IDC_RT, temp, sizeof(temp));
+	val = atoi(temp);
+	ci->refreshcnlisttime = val;
+
+	GetDlgItemText(hdlg, IDC_PR, temp, sizeof(temp));
+	val = atoi(temp);
+	ci->priority = val;
 }
 
 static void

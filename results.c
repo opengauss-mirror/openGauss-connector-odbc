@@ -161,6 +161,10 @@ PGAPI_NumResultCols(HSTMT hstmt,
 		return SQL_INVALID_HANDLE;
 	}
 
+	if (pccol == NULL) {
+		return SQL_ERROR;
+	}
+
 	SC_clear_error(stmt);
 #define	return	DONT_CALL_RETURN_FROM_HERE???
 
