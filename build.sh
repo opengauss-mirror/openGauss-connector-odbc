@@ -45,7 +45,7 @@ elif [ X"$kernel" = X"redflag" ]; then
 elif [ X"$kernel" = X"asianux" ]; then
     dist_version="Asianux"
 else
-    echo "We only support EulerOS, OPENEULER(aarch64) and CentOS platform."
+    echo "We only support EulerOS, OPENEULER(aarch64) CentOS and Asianux platform."
     echo "Kernel is $kernel"
     exit 1
 fi
