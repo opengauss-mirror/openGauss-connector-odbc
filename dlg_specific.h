@@ -178,6 +178,12 @@ extern "C" {
 /* Whether to use batch protocol ('U' message) while batch executing. */
 #define INI_USEBATCHPROTOCOL	"UseBatchProtocol"
 
+#define INI_AUTOBALANCE         "AutoBalance" /* Control the switch of autobalance */
+#define ABBR_AUTOBALANCE		"AuB"
+#define INI_REFRESHCNLISTTIME	"RefreshCNListTime"
+#define ABBR_REFRESHCNLISTTIME		"RT"
+#define INI_PRIORITY		"Priority"
+#define ABBR_PRIORITY		"PR"
 #define	SSLMODE_DISABLE		"disable"
 #define	SSLMODE_ALLOW		"allow"
 #define	SSLMODE_PREFER		"prefer"
@@ -233,7 +239,7 @@ extern "C" {
 #define DEFAULT_PROTOCOL			"7.4"	/* the latest protocol is
 												 * the default */
 #define DEFAULT_USEDECLAREFETCH			0
-#define DEFAULT_FOREXTENSIONCONNECTOR	0
+#define DEFAULT_FOREXTENSIONCONNECTOR	1
 #define DEFAULT_TEXTASLONGVARCHAR		1
 #define DEFAULT_UNKNOWNSASLONGVARCHAR		0
 #define DEFAULT_BOOLSASCHAR			1

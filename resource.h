@@ -32,6 +32,9 @@
 #define IDC_NOTICE_USER			414
 #define IDS_SSLREQUEST_VERIFY_CA	415
 #define IDS_SSLREQUEST_VERIFY_FULL	416
+#define IDC_AB                      417
+#define IDC_RT                      418
+#define IDC_PR                      419
 #define DLG_CONFIG                      1001
 #define IDC_PORT                        1002
 #define DLG_DRIVER_CHANGE               1002

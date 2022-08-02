@@ -674,6 +674,12 @@ copyConnAttributes(ConnInfo *ci, const char *attribute, char *value)
 		ci->keepalive_idle = atoi(value);
 	else if (stricmp(attribute, INI_KEEPALIVEINTERVAL) == 0 || stricmp(attribute, ABBR_KEEPALIVEINTERVAL) == 0)
 		ci->keepalive_interval = atoi(value);
+	else if (stricmp(attribute, INI_AUTOBALANCE) == 0 || stricmp(attribute, ABBR_AUTOBALANCE) == 0)
+		ci->autobalance = atoi(value);
+	else if (stricmp(attribute, INI_REFRESHCNLISTTIME) == 0 || stricmp(attribute, ABBR_REFRESHCNLISTTIME) == 0)
+		ci->refreshcnlisttime = atoi(value);
+	else if (stricmp(attribute, INI_PRIORITY) == 0 || stricmp(attribute, ABBR_PRIORITY) == 0)
+		ci->priority = atoi(value);
 	else if (stricmp(attribute, INI_SSLMODE) == 0 || stricmp(attribute, ABBR_SSLMODE) == 0)
 	{
 		switch (value[0])
@@ -862,6 +868,7 @@ static void Global_defset(GLOBAL_VALUES *comval)
 	comval->bools_as_char = DEFAULT_BOOLSASCHAR;
 	STRCPY_FIXED(comval->extra_systable_prefixes, DEFAULT_EXTRASYSTABLEPREFIXES);
 	STRCPY_FIXED(comval->protocol, DEFAULT_PROTOCOL);
+	comval->for_extension_connector = DEFAULT_FOREXTENSIONCONNECTOR;
 }
 
 static void
@@ -1073,6 +1080,21 @@ MYLOG(0, "drivername=%s\n", drivername);
 		sscanf(temp, "%x", &val);
 		replaceExtraOptions(ci, val, TRUE);
 		MYLOG(0, "force_abbrev=%d bde=%d cvt_null_date=%d\n", ci->force_abbrev_connstr, ci->bde_environment, ci->cvt_null_date_string);
+	}
+
+	if (SQLGetPrivateProfileString(DSN, INI_AUTOBALANCE, NULL_STRING, temp, sizeof(temp), ODBC_INI) > 0) {
+		ci->autobalance = atoi(temp);
+	}
+
+	if (SQLGetPrivateProfileString(DSN, INI_REFRESHCNLISTTIME, NULL_STRING, temp, sizeof(temp), ODBC_INI) > 0) {
+		ci->refreshcnlisttime = atoi(temp);
+	}
+
+	if (SQLGetPrivateProfileString(DSN, INI_PRIORITY, NULL_STRING, temp, sizeof(temp), ODBC_INI) > 0) {
+		ci->priority = atoi(temp);
+		if (ci->priority != 1) {
+			ci->priority = 0;
+		}
 	}
 
 	/* Allow override of odbcinst.ini parameters here */
@@ -1352,6 +1374,22 @@ writeDSNinfo(const ConnInfo *ci)
 	ITOA_FIXED(temp, ci->xa_opt);
 	SQLWritePrivateProfileString(DSN, INI_XAOPT, temp, ODBC_INI);
 #endif /* _HANDLE_ENLIST_IN_DTC_ */
+
+	ITOA_FIXED(temp, ci->autobalance);
+	SQLWritePrivateProfileString(DSN,
+								 INI_AUTOBALANCE,
+								 temp,
+								 ODBC_INI);
+	ITOA_FIXED(temp, ci->refreshcnlisttime);
+	SQLWritePrivateProfileString(DSN,
+								 INI_REFRESHCNLISTTIME,
+								 temp,
+								 ODBC_INI);
+	ITOA_FIXED(temp, ci->priority);
+	SQLWritePrivateProfileString(DSN,
+								 INI_PRIORITY,
+								 temp,
+								 ODBC_INI);
 }
 
 
@@ -1862,6 +1900,9 @@ CC_copy_conninfo(ConnInfo *ci, const ConnInfo *sci)
 	CORR_VALCPY(extra_opts);
 	CORR_VALCPY(keepalive_idle);
 	CORR_VALCPY(keepalive_interval);
+	CORR_VALCPY(autobalance);
+	CORR_VALCPY(refreshcnlisttime);
+	CORR_VALCPY(priority);
 #ifdef	_HANDLE_ENLIST_IN_DTC_
 	CORR_VALCPY(xa_opt);
 #endif

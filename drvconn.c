@@ -406,6 +406,12 @@ dconn_FDriverConnectProc(
 				SetFocus(GetDlgItem(hdlg, IDC_PORT));
 			else if (ci->username[0] == '\0')
 				SetFocus(GetDlgItem(hdlg, IDC_USER));
+			else if (ci->autobalance == 0)
+				SetFocus(GetDlgItem(hdlg, IDC_AB));
+			else if (ci->refreshcnlisttime == 0)
+				SetFocus(GetDlgItem(hdlg, IDC_RT));
+			else if (ci->priority == 0)
+				SetFocus(GetDlgItem(hdlg, IDC_PR));
 			break;
 
 		case WM_COMMAND:
