@@ -136,6 +136,10 @@ declare ODBC_INSTALL_DIR="${BUILD_DIR}/odbc"
 declare ERR_MKGS_FAILED=1
 declare MKGS_OK=0
 
+if [ "$UNIX_ODBC"X = X ]; then
+    UNIX_ODBC="${LOCAL_DIR}/third_party/unixodbc/install_comm/unixODBC-2.3.9"
+fi
+
 SERVERLIBS_PATH="${serverlib_dir}"
 
 ###################################
@@ -180,6 +184,10 @@ function clean_environment()
 #######################################################################
 function install_odbc()
 {
+    cd ${LOCAL_DIR}
+
+    cd ${LOCAL_DIR}/third_party/unixodbc/
+    sh ./build_unixodbc.sh -m build  >> "$LOG_FILE" 2>&1
     cd ${LOCAL_DIR}
 
     export GAUSSHOME=$SERVERLIBS_PATH
