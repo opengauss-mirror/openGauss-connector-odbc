@@ -38,5 +38,5 @@
 ***********************************************************************/
 
 compile psqlodbc by following command:
-sh ./build.sh -m $GAUSSHOME # give the path of GAUSSHOME
+sh ./build.sh -bd $GAUSSHOME # give the path of GAUSSHOME
 the build library is placed under install directory.
