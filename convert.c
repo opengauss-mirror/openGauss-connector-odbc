@@ -266,7 +266,7 @@ filed_is_bytea(const OID field_type)
 			res = FIELD_BINARY_BYTEAOUT;
 			break;
 		case PG_TYPE_RAW:
-        case PG_TYPE_LONG_RAW:
+		case PG_TYPE_LONG_RAW:
 		case PG_TYPE_BLOB:
 			res = FIELD_BINARY_RAWOUT;
 			break;
@@ -1453,7 +1453,7 @@ MYLOG(0, "null_cvt_date_string=%d\n", conn->connInfo.cvt_null_date_string);
 		case PG_TYPE_TIMESTAMP_NO_TMZONE:
 		case PG_TYPE_TIMESTAMP:
 		case PG_TYPE_SMALLDATETIME:
-        case PG_TYPE_ORADATE:
+		case PG_TYPE_ORADATE:
 			std_time.fr = 0;
 			std_time.infinity = 0;
 			if (strnicmp(value, INFINITY_STRING, 8) == 0)
