@@ -266,6 +266,7 @@ filed_is_bytea(const OID field_type)
 			res = FIELD_BINARY_BYTEAOUT;
 			break;
 		case PG_TYPE_RAW:
+        case PG_TYPE_LONG_RAW:
 		case PG_TYPE_BLOB:
 			res = FIELD_BINARY_RAWOUT;
 			break;
