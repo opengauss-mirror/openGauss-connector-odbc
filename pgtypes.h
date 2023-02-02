@@ -70,6 +70,7 @@
 /* binary same as bytea */
 #define PG_TYPE_RAW             86
 #define PG_TYPE_BLOB            88
+#define PG_TYPE_LONG_RAW        94
 #define PG_TYPE_MYSQL_BINARY    9779
 /* oracle date */
 #define PG_TYPE_ORADATE         9040
