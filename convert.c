@@ -1452,6 +1452,7 @@ MYLOG(0, "null_cvt_date_string=%d\n", conn->connInfo.cvt_null_date_string);
 		case PG_TYPE_TIMESTAMP_NO_TMZONE:
 		case PG_TYPE_TIMESTAMP:
 		case PG_TYPE_SMALLDATETIME:
+        case PG_TYPE_ORADATE:
 			std_time.fr = 0;
 			std_time.infinity = 0;
 			if (strnicmp(value, INFINITY_STRING, 8) == 0)
@@ -1649,6 +1650,10 @@ MYLOG(DETAIL_LOG_LEVEL, "2stime fr=%d\n", std_time.fr);
 				case PG_TYPE_BYTEA:
 					text_bin_handling = TRUE;
 					break;
+				default:
+					if (filed_is_bytea(field_type)) {
+						text_bin_handling = TRUE;
+					}
 			}
 			break;
 	}
@@ -1687,6 +1692,7 @@ MYLOG(DETAIL_LOG_LEVEL, "2stime fr=%d\n", std_time.fr);
 			case PG_TYPE_DATETIME:
 			case PG_TYPE_TIMESTAMP_NO_TMZONE:
 			case PG_TYPE_TIMESTAMP:
+			case PG_TYPE_ORADATE:
 				len = stime2timestamp(&std_time, midtemp, midsize, FALSE,
 									  (int) (midsize - 19 - 2) );
 				break;
@@ -5376,7 +5382,7 @@ MYLOG(0, "cvt_null_date_string=%d pgtype=%d send_buf=%p\n", conn->connInfo.cvt_n
 					qb->errornumber = STMT_EXEC_ERROR;
 					goto cleanup;
 			}
-			if (param_pgtype == PG_TYPE_BYTEA)
+			if (filed_is_bytea(param_pgtype))
 			{
 				if (0 != (qb->flags & FLGB_BINARY_AS_POSSIBLE))
 				{
@@ -6283,7 +6289,7 @@ conv_from_octal(const char *s)
 
 /*	convert octal escapes to bytes */
 static size_t
-convert_from_pgbinary(const char *value, char *rgbValue, SQLLEN cbValueMax)
+convert_from_pgbinary(const char *value, bool binary_rawout, char *rgbValue, SQLLEN cbValueMax)
 {
 	size_t		i,
 				ilen = strlen(value);
@@ -6319,6 +6325,18 @@ convert_from_pgbinary(const char *value, char *rgbValue, SQLLEN cbValueMax)
 				o++;
 				i += 4;
 			}
+		}
+		else if (binary_rawout) 
+		{
+			//rawout, 十六进制,但最前面没有\x
+			if (i < ilen)
+			{
+				ilen -= i;
+				if (rgbValue)
+					pg_hex2bin(value + i, rgbValue + o, ilen);
+				o += ilen / 2;
+			}
+			break;
 		}
 		else
 		{
