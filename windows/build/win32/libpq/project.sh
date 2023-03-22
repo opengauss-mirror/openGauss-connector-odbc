@@ -1,14 +1,15 @@
-# Copyright Huawei Technologies Co., Ltd. 2010-2018. All rights reserved.
 #!/bin/bash
 MD="mkdir -p"
 RM="rm -rf"
 CP="cp -r"
-ROOT_DIR=$LIB_GAUSSDB_DIR 
-#ROOT_DIR=`pwd`/..
-SRC_DIR=$ROOT_DIR/../open_source/opengauss/src
+# ROOT_DIR=$LIB_GAUSSDB_DIR 
+ROOT_DIR=$(pwd)/..
+SRC_DIR=$ROOT_DIR/../openGauss-server/src
+
 LIBPQ_WIN32_DIR=$ROOT_DIR/libpq-win32
-PREPARED_DIR=$LIBPQ_WIN32_DIR
+PREPARED_DIR=$LIBPQ_WIN32_DIR/
 EXPORT_DIR=$LIBPQ_WIN32_DIR/libpq-export
+LIB_SECURITY_DIR=$ROOT_DIR/../Huawei_Secure_C_V100R001C01SPC010B002
 
 ### function ###
 function copy_file()
@@ -18,7 +19,7 @@ src=$2  #source directory
 dst=$3  #target directory
 if [ ! -f "$src"/"$file" ];then
     echo "Error: $src/$file doesn't exist, exit."
-    exit -1
+    exit 1
 fi
 if [ ! -d $dst ];then
     $MD $dst
@@ -32,31 +33,31 @@ function init_win_project()
 {
    if [ ! -f "$PREPARED_DIR"/include/pg_config.h ]; then
       echo "Error: Header file pg_config.h for Windows lost, exit."
-      exit -1
+      exit 1
    fi
    if [ ! -f "$PREPARED_DIR"/include/pg_config_os.h ]; then
       echo "Error: Header file pg_config_os.h for Windows lost, exit."
-      exit -1
+      exit 1
    fi
    if [ ! -f "$PREPARED_DIR"/include/pg_config_paths.h ]; then
       echo "Error: Header file pg_config_paths.h for Windows lost, exit."
-      exit -1
+      exit 1
    fi
    if [ ! -f "$PREPARED_DIR"/include/errcodes.h ]; then
       echo "Error: Header file errcodes.h for Windows lost, exit."
-      exit -1
+      exit 1
    fi
    if [ ! -f "$PREPARED_DIR"/include/libpqdll.def ]; then
       echo "Error: Interface definition file libpqdll.def for Windows lost, exit."
-      exit -1
+      exit 1
    fi
    if [ ! -f "$PREPARED_DIR"/Makefile ];then
       echo "Error: Makefile for MinGW complier lost, exit."
-      exit -1
+      exit 1
    fi
    if [ ! -f "$PREPARED_DIR"/CMakeLists.txt ];then
       echo "Error: CMakeLists.txt for CMake && MinGW complier lost, exit."
-      exit -1
+      exit 1
    fi
 #   $RM $LIBPQ_WIN32_DIR/include
    $RM $LIBPQ_WIN32_DIR/src
@@ -101,6 +102,8 @@ copy_file cstrings_map.h       $SRC_DIR/include/client_logic $LIBPQ_WIN32_DIR/in
 copy_file gstrace_infra.h     $SRC_DIR/include/gstrace $LIBPQ_WIN32_DIR/include/gstrace
 copy_file gstrace_infra_int.h $SRC_DIR/include/gstrace $LIBPQ_WIN32_DIR/include/gstrace
 copy_file gstrace_tool.h      $SRC_DIR/include/gstrace $LIBPQ_WIN32_DIR/include/gstrace
+#include/lib
+copy_file stringinfo.h $SRC_DIR/include/lib $LIBPQ_WIN32_DIR/include/lib
 # include/libcomm
 #copy_file libcomm.h $SRC_DIR/include/libcomm $LIBPQ_WIN32_DIR/include/libcomm
 # include/libpq
