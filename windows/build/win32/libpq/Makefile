@@ -3,7 +3,7 @@
 #################################################################
 
 ifndef $(OPENSSL_DIR)
-OPENSSL_DIR:=/d/Program_Files/OpenSSL-Win32
+OPENSSL_DIR:=/d/windows_odbc/win32/open_source/output/openssl-win32
 endif
 
 ifndef $(MINGW_DIR)
