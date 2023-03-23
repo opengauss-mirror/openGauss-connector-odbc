@@ -6,7 +6,7 @@ SET(CMAKE_VERBOSE_MAKEFILEON ON)
 MESSAGE(STATUS "Building LIBPQ Library.")
 
 IF(NOT DEFINED OPENSSL_DIR)
-	set(OPENSSL_DIR "D:\\Program_Files\\OpenSSL-Win32")
+	set(OPENSSL_DIR "D:\\windows_odbc\\win32\\open_source\\output\\openssl-win32")
 ENDIF(NOT DEFINED OPENSSL_DIR)
 IF(NOT DEFINED MINGW_DIR)
 	set(MINGW_DIR "D:\\buildtools\\mingw-8.1.0\\msys32\\mingw32")

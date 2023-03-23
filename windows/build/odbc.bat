@@ -3,15 +3,25 @@ REM Copyright Huawei Technologies Co., Ltd. 2010-2018. All rights reserved.
 setlocal
 
 set WD=%__CD__%
-set LIB_SECURITY_DIR=%WD%\..\..\..\..\platform\Huawei_Secure_C\Huawei_Secure_C_V100R001C01SPC010B002
-set LIB_GAUSSDB_DIR=%WD%\..\..\..\..\..\server
-set LIB_ODBC_DIR=%WD%\..\..
+set LIB_SECURITY_DIR=D:\windows_odbc\win32\open_source\Huawei_Secure_C_V100R001C01SPC010B002
+set LIB_GAUSSDB_DIR=D:\windows_odbc\win32\open_source\openGauss-server
+set LIB_ODBC_DIR=D:\windows_odbc\win32\open_source\openGauss-connector-odbc
 
-set MINGW_DIR=C:\buildtools\mingw-8.1.0\msys32\mingw32
-set CMAKE_DIR=C:\buildtools\cmake
-set OPENSSL_DIR=D:\GaussDBKernel\open_source\output\openssl-win
+set MINGW_DIR=D:\buildtools\mingw-8.1.0\msys64\mingw32
+set CMAKE_DIR=D:\env\cmake-3.26
+REM openss compiled direction
+set OPENSSL_DIR=D:\windows_odbc\win32\open_source\output\openssl-win32
 
+set p7zip=D:\install\7-Zip
+set OUTPUT_DIR=%LIB_ODBC_DIR%/odbc_output
 
+if not exist %OPENSSL_DIR%/libcrypto-1_1.dll (
+    cd %WD%
+    REM Build openssl
+    call openssl.bat
+)
+
+cd %WD%
 REM Build libsecurec.lib
 cp win32/libpq/CMakeLists-huawei-securec.txt %LIB_SECURITY_DIR%/CMakeLists.txt 
 cd %LIB_SECURITY_DIR% 
@@ -20,21 +30,23 @@ mkdir build
 cd build
 cmake -DMINGW_DIR="%MINGW_DIR%" -D"CMAKE_MAKE_PROGRAM:PATH=%MINGW_DIR%/bin/make.exe" -G "MinGW Makefiles" ..
 make
-cd %WD%
 
+cd %WD%
 REM Build libpq.lib 
 rm -rf %LIB_GAUSSDB_DIR%/libpq-win32
 cp -r win32/libpq %LIB_GAUSSDB_DIR%/libpq-win32
 cd %LIB_GAUSSDB_DIR%/libpq-win32 
 cp -r %LIB_SECURITY_DIR%/output ./lib
-bash -l %LIB_GAUSSDB_DIR%/libpq-win32/project.sh
+bash %LIB_GAUSSDB_DIR%/libpq-win32/project.sh
 rm -rf build
 mkdir build
 cd build
 cmake -DMINGW_DIR="%MINGW_DIR%" -DOPENSSL_DIR="%OPENSSL_DIR%" -D"CMAKE_MAKE_PROGRAM:PATH=%MINGW_DIR%/bin/make.exe" -G "MinGW Makefiles" ..
+sed -i 's/LIB_CRYPTO-NOTFOUND/D:\/windows_odbc\/win32\/open_source\/output\/openssl-win32\/libcrypto-1_1.dll/g' CMakeCache.txt
+sed -i 's/LIB_SSL-NOTFOUND/D:\/windows_odbc\/win32\/open_source\/output\/openssl-win32\/libssl-1_1.dll/g' CMakeCache.txt
 make
-cd %WD%
 
+cd %WD%
 REM Build psqlodbc35w.lib 
 cd %LIB_ODBC_DIR%
 rm -rf libpq
@@ -45,9 +57,11 @@ rm -rf build
 mkdir build
 cd build
 cmake -DMINGW_DIR="%MINGW_DIR%" -DOPENSSL_DIR="%OPENSSL_DIR%" -D"CMAKE_MAKE_PROGRAM:PATH=%MINGW_DIR%/bin/make.exe" -G "MinGW Makefiles" ..
+sed -i 's/LIB_CRYPTO-NOTFOUND/D:\/windows_odbc\/win32\/open_source\/output\/openssl-win32\/libcrypto-1_1.dll/g' CMakeCache.txt
+sed -i 's/LIB_SSL-NOTFOUND/D:\/windows_odbc\/win32\/open_source\/output\/openssl-win32\/libssl-1_1.dll/g' CMakeCache.txt
 make
-cd %WD%
 
+cd %WD%
 REM Build psqlodbc.exe
 cd psqlodbc-installer
 rm -rf win32_dll
@@ -63,13 +77,9 @@ mkdir odbc_output
 cp psqlodbc-installer/psqlodbc.exe odbc_output
 rm -rf psqlodbc-installer/psqlodbc.exe
 
-
 cd odbc_output
-%p7zip%\7z.exe a GaussDB-Kernel-V500R002C10-Windows-Odbc-X86.tar *
-%p7zip%\7z.exe a -tgzip GaussDB-Kernel-V500R002C10-Windows-Odbc-X86.tar.gz *.tar
-del *.tar
+%p7zip%\7z.exe a -tgzip openGauss-5.0.0-ODBC-windows.tar.gz ./*
 
-set OUTPUT_DIR=%LIB_ODBC_DIR%/output
+rm -rf "%OUTPUT_DIR%"
 mkdir "%OUTPUT_DIR%"
-cp GaussDB-Kernel-V500R002C00-Windows-Odbc-X86.tar.gz %OUTPUT_DIR%
-
+cp -r openGauss-5.0.0-ODBC-windows.tar.gz %OUTPUT_DIR%
