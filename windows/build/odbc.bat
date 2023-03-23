@@ -9,22 +9,17 @@ set LIB_ODBC_DIR=D:\windows_odbc\win32\open_source\openGauss-connector-odbc
 
 set MINGW_DIR=D:\buildtools\mingw-8.1.0\msys64\mingw32
 set CMAKE_DIR=D:\env\cmake-3.26
+REM openss compiled direction
 set OPENSSL_DIR=D:\windows_odbc\win32\open_source\output\openssl-win32
 
-set OPENSSL_DIR=D:\windows_odbc\win32\open_source\openssl-OpenSSL_1_1_1n\openssl-OpenSSL_1_1_1n
-set MSYS_SHELL=D:\buildtools\mingw-8.1.0\msys64\msys2_shell.cmd
+set p7zip=D:\install\7-Zip
+set OUTPUT_DIR=%LIB_ODBC_DIR%/odbc_output
 
-cd %WD%
-REM build openssl
-cd %OPENSSL_DIR%
-REM openssl config
-%MSYS_SHELL% -defterm -mingw32 -no-start -full-path -here -c './Configure ^
---prefix=$PWD/openssl-win32 ^
-shared mingw no-tests; make -j20; make install -j20; ^
-cp $PWD/openssl-win32/bin/libssl-1_1.dll $PWD/openssl-win32; ^
-cp $PWD/openssl-win32/bin/libcrypto-1_1.dll $PWD/openssl-win32; ^
-rm -rf $PWD/../../output; ^
-mkdir -p $PWD/../../output; mv $PWD/openssl-win32 $PWD/../../output/.' ^
+if not exist %OPENSSL_DIR%/libcrypto-1_1.dll (
+    cd %WD%
+    REM Build openssl
+    call openssl.bat
+)
 
 cd %WD%
 REM Build libsecurec.lib
@@ -42,11 +37,13 @@ rm -rf %LIB_GAUSSDB_DIR%/libpq-win32
 cp -r win32/libpq %LIB_GAUSSDB_DIR%/libpq-win32
 cd %LIB_GAUSSDB_DIR%/libpq-win32 
 cp -r %LIB_SECURITY_DIR%/output ./lib
-bash -l %LIB_GAUSSDB_DIR%/libpq-win32/project.sh
+bash %LIB_GAUSSDB_DIR%/libpq-win32/project.sh
 rm -rf build
 mkdir build
 cd build
 cmake -DMINGW_DIR="%MINGW_DIR%" -DOPENSSL_DIR="%OPENSSL_DIR%" -D"CMAKE_MAKE_PROGRAM:PATH=%MINGW_DIR%/bin/make.exe" -G "MinGW Makefiles" ..
+sed -i 's/LIB_CRYPTO-NOTFOUND/D:\/windows_odbc\/win32\/open_source\/output\/openssl-win32\/libcrypto-1_1.dll/g' CMakeCache.txt
+sed -i 's/LIB_SSL-NOTFOUND/D:\/windows_odbc\/win32\/open_source\/output\/openssl-win32\/libssl-1_1.dll/g' CMakeCache.txt
 make
 
 cd %WD%
@@ -60,6 +57,8 @@ rm -rf build
 mkdir build
 cd build
 cmake -DMINGW_DIR="%MINGW_DIR%" -DOPENSSL_DIR="%OPENSSL_DIR%" -D"CMAKE_MAKE_PROGRAM:PATH=%MINGW_DIR%/bin/make.exe" -G "MinGW Makefiles" ..
+sed -i 's/LIB_CRYPTO-NOTFOUND/D:\/windows_odbc\/win32\/open_source\/output\/openssl-win32\/libcrypto-1_1.dll/g' CMakeCache.txt
+sed -i 's/LIB_SSL-NOTFOUND/D:\/windows_odbc\/win32\/open_source\/output\/openssl-win32\/libssl-1_1.dll/g' CMakeCache.txt
 make
 
 cd %WD%
@@ -78,13 +77,9 @@ mkdir odbc_output
 cp psqlodbc-installer/psqlodbc.exe odbc_output
 rm -rf psqlodbc-installer/psqlodbc.exe
 
-
 cd odbc_output
-%p7zip%\7z.exe a windows-odbc-x86.tar *
-%p7zip%\7z.exe a -tgzip windows-odbc-x86.tar.gz *.tar
-del *.tar
+%p7zip%\7z.exe a -tgzip openGauss-5.0.0-ODBC-windows.tar.gz ./*
 
-set OUTPUT_DIR=%LIB_ODBC_DIR%/output
+rm -rf "%OUTPUT_DIR%"
 mkdir "%OUTPUT_DIR%"
-cp windows-odbc-x86.tar.gz %OUTPUT_DIR%
-
+cp -r openGauss-5.0.0-ODBC-windows.tar.gz %OUTPUT_DIR%
