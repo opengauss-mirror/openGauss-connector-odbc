@@ -17,10 +17,12 @@ SQLINTEGER     V_OD_err,V_OD_rowanz,V_OD_id,V_ID;
 SQLSMALLINT     V_OD_mlen,V_OD_colanz;
 char             V_OD_msg[200],V_OD_buffer[200],remark[200],V_OD_buffer1[200];
 SQLLEN non_unique_ind,type_ind,index_name_ind,column_name_ind,card_ind,pages_ind;
-SQLINTEGER maxlv,minlv,non_unique,type,index_name,column_name,cardinality,pages;
+SQLINTEGER maxlv,minlv,non_unique,type,cardinality,pages;
 SQLINTEGER m_min,m_max;
 SQLCHAR schema[200] = "FVT_INTERFACE";
 SQLCHAR table[200] = "odbc_SQLStatistics";
+SQLCHAR index_name[200];
+SQLCHAR column_name[200];
 
 char *buf = "Mike";
 int value = 3;
@@ -155,7 +157,7 @@ int main(int argc,char *argv[])
        else
           printf("    Cardinality = (Unavailable)");
        if (pages_ind != SQL_NULL_DATA)
-          printf(" Pages = ",pages);
+          printf(" Pages = %d",pages);
        else
           printf(" Pages = (Unavailable)\n");
     }
