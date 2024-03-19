@@ -104,7 +104,7 @@ while [ $# -gt 0 ]; do
             serverlib_dir=$2
             shift 2
             ;;
-	-ud|--unixodbc_dir)
+	    -ud|--unixodbc_dir)
             if [ "$2"X = X ]; then
                 echo "no given unixodbc directory values"
                 exit 1

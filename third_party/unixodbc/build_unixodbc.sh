@@ -91,7 +91,8 @@ function build_component()
 	if [ $? -ne 0 ]; then
                 die "[Error] change dir to $SRC_DIR failed."
         fi
-
+	
+	patch -p1 < ../CVE-2024-1013.patch
 	log "[Notice] start autoreconf."
 	autoreconf -fi
 	if [ $? -ne 0 ]; then
