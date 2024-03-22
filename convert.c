@@ -169,7 +169,7 @@ static const char *mapFunction(const char *func, int param_count);
 static BOOL convert_money(const char *s, char *sout, size_t soutmax);
 static char parse_datetime(const char *buf, SIMPLE_TIME *st);
 size_t convert_linefeeds(const char *s, char *dst, size_t max, BOOL convlf, BOOL *changed);
-static size_t convert_from_pgbinary(const char *value, char *rgbValue, SQLLEN cbValueMax);
+static size_t convert_from_pgbinary(const char *value, bool binary_rawout, char *rgbValue, SQLLEN cbValueMax);
 static int convert_lo(StatementClass *stmt, const void *value, SQLSMALLINT fCType,
 	 PTR rgbValue, SQLLEN cbValueMax, SQLLEN *pcbValue);
 static int conv_from_octal(const char *s);
@@ -241,6 +241,40 @@ static unsigned ODBCINT64 ATOI64U(const char *val)
 
 static void ResolveNumericParam(const SQL_NUMERIC_STRUCT *ns, char *chrform);
 static void parse_to_numeric_struct(const char *wv, SQL_NUMERIC_STRUCT *ns, BOOL *overflow);
+
+/*
+ * field_is_bytea
+ * 检查oid field_type在数据库中是否为类似bytea的二进制数据类型
+ * 返回0 表示不是二进制数据类型
+ * 返回1 表示是二进制数据类型,并且byteaout进行输出
+ * 		有两种字符串输出方式 (由数据库的bytea_output选项控制,分别为hex和escape)
+ * 		a. 将数据的每个字节以十六进制输出,在最前面加上 \x (\x010203)
+ *      b. 将数据的每个字节以八进制输出, 每个字节前加上 \ (\001\002\003),但如果是可打印字符,那么还是按字符打出
+ * 返回2 表示是二进制数据类型,并且rawout进行输出
+ * 		将数据的每个字节以十六进制输出即可
+ * 
+ */
+#define FIELD_BINARY_BYTEAOUT	1
+#define FIELD_BINARY_RAWOUT		2
+static int 
+filed_is_bytea(const OID field_type)
+{
+	int res = 0;
+	switch (field_type) {
+		case PG_TYPE_BYTEA:
+		case PG_TYPE_MYSQL_BINARY:
+			res = FIELD_BINARY_BYTEAOUT;
+			break;
+		case PG_TYPE_RAW:
+		case PG_TYPE_LONG_RAW:
+		case PG_TYPE_BLOB:
+			res = FIELD_BINARY_RAWOUT;
+			break;
+		default:
+			res = 0;
+	}
+	return res;
+}
 
 /*
  *	TIMESTAMP <-----> SIMPLE_TIME
@@ -900,6 +934,7 @@ setup_getdataclass(SQLLEN * const length_return, const char ** const ptr_return,
 	BOOL	changed = FALSE;
 	int	len_for_wcs_term = 0;
 
+	bool binary_rawout = false;
 #ifdef	UNICODE_SUPPORT
 	char	*allocbuf = NULL;
 	int	unicode_count = -1;
@@ -907,14 +942,28 @@ setup_getdataclass(SQLLEN * const length_return, const char ** const ptr_return,
 	BOOL	hybrid = FALSE;
 #endif /* UNICODE_SUPPORT */
 
-	if (PG_TYPE_BYTEA == field_type)
+	// if (PG_TYPE_BYTEA == field_type)
+	if (FIELD_BINARY_BYTEAOUT == filed_is_bytea(field_type))
 	{
+		//BYTEA类型数据从pg内核发送过来时,会根据参数添加\x表示十六进制
+		//或者直接收到其二进制裸数据的八进制字符串(\001 \002 \003)
+
+		//如果以SQL_C_BINARY接收,则要将字符串转换成二进制字节流
 		if (SQL_C_BINARY == fCType)
 			bytea_process_kind = BYTEA_PROCESS_BINARY;
 		else if (0 == strnicmp(neut_str, "\\x", 2)) /* hex format */
 			neut_str += 2;
 		else
 			bytea_process_kind = BYTEA_PROCESS_ESCAPE;
+	} 
+	else if (FIELD_BINARY_RAWOUT == filed_is_bytea(field_type))
+	{
+		//对于raw调用的rawout,将收到裸数据的十六进制字符串,且前面没有\x
+		if (SQL_C_BINARY == fCType)
+		{
+			bytea_process_kind = BYTEA_PROCESS_BINARY;
+			binary_rawout = true;
+		}
 	}
 
 #ifdef	UNICODE_SUPPORT
@@ -947,7 +996,7 @@ setup_getdataclass(SQLLEN * const length_return, const char ** const ptr_return,
 	if (fCType == SQL_C_WCHAR)
 	{
 		if (BYTEA_PROCESS_ESCAPE == bytea_process_kind)
-			unicode_count = convert_from_pgbinary(neut_str, NULL, 0) * 2;
+			unicode_count = convert_from_pgbinary(neut_str, binary_rawout, NULL, 0) * 2;
 		else if (hybrid)
 		{
 			MYLOG(0, "hybrid estimate\n");
@@ -979,7 +1028,7 @@ setup_getdataclass(SQLLEN * const length_return, const char ** const ptr_return,
 		;
 	else if (0 != bytea_process_kind)
 	{
-		len = convert_from_pgbinary(neut_str, NULL, 0);
+		len = convert_from_pgbinary(neut_str, binary_rawout, NULL, 0);
 		if (BYTEA_PROCESS_BINARY != bytea_process_kind)
 			len *= 2;
 		changed = TRUE;
@@ -1021,7 +1070,7 @@ setup_getdataclass(SQLLEN * const length_return, const char ** const ptr_return,
 		{
 			if (BYTEA_PROCESS_ESCAPE == bytea_process_kind)
 			{
-				len = convert_from_pgbinary(neut_str, pgdc->ttlbuf, pgdc->ttlbuflen);
+				len = convert_from_pgbinary(neut_str, binary_rawout, pgdc->ttlbuf, pgdc->ttlbuflen);
 				len = pg_bin2whex(pgdc->ttlbuf, (SQLWCHAR *) pgdc->ttlbuf, len);
 			}
 			else
@@ -1055,7 +1104,7 @@ setup_getdataclass(SQLLEN * const length_return, const char ** const ptr_return,
 			;
 		else if (0 != bytea_process_kind)
 		{
-			len = convert_from_pgbinary(neut_str, pgdc->ttlbuf, pgdc->ttlbuflen);
+			len = convert_from_pgbinary(neut_str, binary_rawout, pgdc->ttlbuf, pgdc->ttlbuflen);
 			if (BYTEA_PROCESS_ESCAPE == bytea_process_kind)
 				len = pg_bin2hex(pgdc->ttlbuf, pgdc->ttlbuf, len);
 		}
@@ -1404,6 +1453,7 @@ MYLOG(0, "null_cvt_date_string=%d\n", conn->connInfo.cvt_null_date_string);
 		case PG_TYPE_TIMESTAMP_NO_TMZONE:
 		case PG_TYPE_TIMESTAMP:
 		case PG_TYPE_SMALLDATETIME:
+		case PG_TYPE_ORADATE:
 			std_time.fr = 0;
 			std_time.infinity = 0;
 			if (strnicmp(value, INFINITY_STRING, 8) == 0)
@@ -1601,6 +1651,10 @@ MYLOG(DETAIL_LOG_LEVEL, "2stime fr=%d\n", std_time.fr);
 				case PG_TYPE_BYTEA:
 					text_bin_handling = TRUE;
 					break;
+				default:
+					if (filed_is_bytea(field_type)) {
+						text_bin_handling = TRUE;
+					}
 			}
 			break;
 	}
@@ -1639,6 +1693,7 @@ MYLOG(DETAIL_LOG_LEVEL, "2stime fr=%d\n", std_time.fr);
 			case PG_TYPE_DATETIME:
 			case PG_TYPE_TIMESTAMP_NO_TMZONE:
 			case PG_TYPE_TIMESTAMP:
+			case PG_TYPE_ORADATE:
 				len = stime2timestamp(&std_time, midtemp, midsize, FALSE,
 									  (int) (midsize - 19 - 2) );
 				break;
@@ -5328,7 +5383,7 @@ MYLOG(0, "cvt_null_date_string=%d pgtype=%d send_buf=%p\n", conn->connInfo.cvt_n
 					qb->errornumber = STMT_EXEC_ERROR;
 					goto cleanup;
 			}
-			if (param_pgtype == PG_TYPE_BYTEA)
+			if (filed_is_bytea(param_pgtype))
 			{
 				if (0 != (qb->flags & FLGB_BINARY_AS_POSSIBLE))
 				{
@@ -6235,7 +6290,7 @@ conv_from_octal(const char *s)
 
 /*	convert octal escapes to bytes */
 static size_t
-convert_from_pgbinary(const char *value, char *rgbValue, SQLLEN cbValueMax)
+convert_from_pgbinary(const char *value, bool binary_rawout, char *rgbValue, SQLLEN cbValueMax)
 {
 	size_t		i,
 				ilen = strlen(value);
@@ -6271,6 +6326,18 @@ convert_from_pgbinary(const char *value, char *rgbValue, SQLLEN cbValueMax)
 				o++;
 				i += 4;
 			}
+		}
+		else if (binary_rawout) 
+		{
+			//rawout, 十六进制,但最前面没有\x
+			if (i < ilen)
+			{
+				ilen -= i;
+				if (rgbValue)
+					pg_hex2bin(value + i, rgbValue + o, ilen);
+				o += ilen / 2;
+			}
+			break;
 		}
 		else
 		{
