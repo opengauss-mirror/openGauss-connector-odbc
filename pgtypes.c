@@ -373,15 +373,17 @@ MYLOG(DETAIL_LOG_LEVEL, "!!! catalog_result=%d\n", handle_unknown_size_as);
 static SQLSMALLINT
 getNumericDecimalDigitsX(const ConnectionClass *conn, OID type, int atttypmod, int adtsize_or_longest, int UNUSED_handle_unknown_size_as)
 {
-	Int4		default_decimal_digits = 6;
+	Int4		default_decimal_digits = 6, scale;
 
 	MYLOG(0, "entering type=%d, atttypmod=%d\n", type, atttypmod);
 
 	if (atttypmod < 0 && adtsize_or_longest < 0)
 		return default_decimal_digits;
 
-	if (atttypmod > -1)
-		return (atttypmod & 0xffff);
+	if (atttypmod > -1) {
+		scale = (Int2)(atttypmod & 0xffff);
+		return scale;
+	}
 	if (adtsize_or_longest <= 0)
 		return default_decimal_digits;
 	adtsize_or_longest >>= 16; /* extract the scale part */
@@ -997,6 +999,14 @@ Int4
 pgtype_attr_display_size(const ConnectionClass *conn, OID type, int atttypmod, int adtsize_or_longestlen, int handle_unknown_size_as)
 {
 	int	dsize;
+	int scale = getNumericDecimalDigitsX(conn, type, atttypmod, adtsize_or_longestlen, handle_unknown_size_as);
+
+	/* 
+	 * when behavior_compat_options='float_as_numeric' is on,
+	 * openGauss accepts float(p) as numeric Type and 
+	 * the scale is -32768(PG_INT16_MIN)
+	 */
+	const int float_scale = -32768;
 
 	switch (type)
 	{
@@ -1016,7 +1026,13 @@ pgtype_attr_display_size(const ConnectionClass *conn, OID type, int atttypmod, i
 
 		case PG_TYPE_NUMERIC:
 			dsize = getNumericColumnSizeX(conn, type, atttypmod, adtsize_or_longestlen, handle_unknown_size_as);
-			return dsize <= 0 ? dsize : dsize + 2;
+			if (scale < 0) {
+				return scale != float_scale ? dsize - scale + 2 : adtsize_or_longestlen;	/* sign + digits */
+			} else if (scale > dsize) {
+				return scale + 2;			/* sign + decimal point + digits */
+			} else {
+				return dsize <= 0 ? dsize : dsize + 2;
+			}
 
 		case PG_TYPE_MONEY:
 			return 15;			/* ($9,999,999.99) */
