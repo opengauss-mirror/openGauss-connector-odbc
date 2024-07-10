@@ -2687,7 +2687,7 @@ MYLOG(0, " and the data=%s\n", attdef);
 		 * NUMERIC - the decimal_digits is stored in atttypmod as follows:
 		 *
 		 *	column_size =((atttypmod - VARHDRSZ) >> 16) & 0xffff
-		 *	decimal_digits	 = (atttypmod - VARHDRSZ) & 0xffff
+		 *	decimal_digits	 = (Int2)((atttypmod - VARHDRSZ) & 0xffff)
 		 *
 		 *----------
 		 */
