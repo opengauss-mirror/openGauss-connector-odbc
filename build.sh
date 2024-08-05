@@ -58,9 +58,8 @@ else
 fi
 
 ##default install version storage path
-declare mppdb_version='GaussDB Kernel'
-declare mppdb_name_for_package="$(echo ${mppdb_version} | sed 's/ /-/g')"
-declare version_number='V500R002C10'
+declare mppdb_name='openGauss-ODBC'
+declare version_number='6.0.0'
 #######################################################################
 ## print help information
 #######################################################################
@@ -124,9 +123,36 @@ done
 #######################################################################
 ## declare all package name
 #######################################################################
-declare version_string="${mppdb_name_for_package}-${version_number}"
-declare package_pre_name="${version_string}-${dist_version}-${PLATFORM}bit"
-declare odbc_package_name="${package_pre_name}-Odbc.${install_package_format}.gz"
+
+kernel=""
+dist_version=""
+arch=$(uname -p)
+if [ -f "/etc/euleros-release" ]; then
+    kernel=$(cat /etc/euleros-release | awk -F ' ' '{print $1}' | tr A-Z a-z)
+elif [ -f "/etc/openEuler-release" ]; then
+    kernel=$(cat /etc/openEuler-release | awk -F ' ' '{print $1}' | tr A-Z a-z)
+elif [ -f "/etc/centos-release" ]; then
+    kernel=$(cat /etc/centos-release | awk -F ' ' '{print $1}' | tr A-Z a-z)
+else
+    kernel=$(lsb_release -d | awk -F ' ' '{print $2}'| tr A-Z a-z)
+fi
+
+if [ X"$kernel" == X"euleros" ]; then
+    dist_version="EulerOS"
+elif [ X"$kernel" == X"centos" ]; then
+    dist_version="CentOS"
+elif [ X"$kernel" == X"openeuler" ]; then
+    dist_version="openEuler"
+elif [ X"$kernel" == X"kylin" ]; then
+    dist_version="kylin"
+else
+    dist_version="Linux"
+fi
+
+os_version=$(cat /etc/os-release | grep -w VERSION_ID | awk -F '"' '{print $2}')
+
+declare version_string="${mppdb_name}-${version_number}"
+declare odbc_package_name="${version_string}-${dist_version}${os_version}-${arch}.tar.gz"
 declare windows_odbc_package_name="${version_string}-Windows-Odbc.tar.gz"
 
 echo "[makeodbc] $(date +%y-%m-%d' '%T): script dir : ${LOCAL_DIR}"
