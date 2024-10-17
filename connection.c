@@ -2964,8 +2964,15 @@ char* generate_conninfo_URL_by_ConnInfo(ConnInfo* ci, int* host_number, int* por
     }
     strcat(temp_URL, "/");
     strcat(temp_URL, ci->database);
-    (*host_number == 1 && *port_number == 1) ?
-        strcat(temp_URL, "?target_session_attrs=any") : strcat(temp_URL, "?target_session_attrs=read-write");
+    char target_session_attrs[MEDIUM_REGISTRY_LEN] = "?target_session_attrs=";
+    if (*host_number == 1 && *port_number == 1) {
+        strcat(target_session_attrs, "any");
+    } else if ('\0' == ci->target_session_attrs[0]) {
+        strcat(target_session_attrs, "read-write");
+    } else {
+        strcat(target_session_attrs, ci->target_session_attrs);
+    }
+    strcat(temp_URL, target_session_attrs);
     strcat(temp_URL, "&password=");
     strcat(temp_URL, ci->password.name);
     return temp_URL;

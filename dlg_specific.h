@@ -54,6 +54,7 @@ extern "C" {
 #define INI_UID				"UID"		/* Default User Name */
 #define INI_USERNAME			"Username"	/* Default User Name */
 #define INI_PASSWORD			"Password"	/* Default Password */
+#define TARGET_SESSION_ATTRS		"target_session_attrs"	/* Default target_session_attrs */
 
 #define	INI_ABBREVIATE			"CX"
 #define INI_DEBUG			"Debug"		/* Debug flag */
