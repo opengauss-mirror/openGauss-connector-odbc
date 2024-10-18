@@ -3404,6 +3404,10 @@ char* generate_conninfo_URL_by_ConnInfo(ConnInfo* ci, int* host_number, int* por
         strcat(temp_URL, "?target_session_attrs=any") : strcat(temp_URL, "?target_session_attrs=read-write");
     strcat(temp_URL, "&password=");
     strcat(temp_URL, ci->password.name);
+    if ('\0' != ci->sslmode) {
+        strcat(temp_URL, "&sslmode=");
+        strcat(temp_URL, ci->sslmode);
+    }
     return temp_URL;
 }
 
