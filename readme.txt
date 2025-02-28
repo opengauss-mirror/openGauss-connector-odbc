@@ -40,3 +40,12 @@
 compile psqlodbc by following command:
 sh ./build.sh -bd $GAUSSHOME # give the path of GAUSSHOME
 the build library is placed under install directory.
+
+Obtain the officially released version of ODBC for openGauss Connectors from the following link:
+https://opengauss.org/zh/download/
+
+Check the integrity of the software package by following command:
+sha256sum openGauss-ODBC-xxx.tar.gz
+
+Compare the obtained SHA256 value with the SHA256 value of the corresponding version on the official 
+website. If they match, it indicates that the software package is intact; otherwise, you will need to redownload it.
