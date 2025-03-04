@@ -3415,6 +3415,16 @@ char* generate_conninfo_URL_by_ConnInfo(ConnInfo* ci, int* host_number, int* por
         strcat(temp_URL, "&sslmode=");
         strcat(temp_URL, ci->sslmode);
     }
+    if ('\0' != ci->connect_timeout[0]) {
+        char connect_timeout[MEDIUM_REGISTRY_LEN] = "&connect_timeout=";
+        strcat(connect_timeout, ci->connect_timeout);
+        strcat(temp_URL, connect_timeout);
+    }
+    if ('\0' != ci->rw_timeout[0]) {
+        char rw_timeout[MEDIUM_REGISTRY_LEN] = "&rw_timeout=";
+        strcat(rw_timeout, ci->rw_timeout);
+        strcat(temp_URL, rw_timeout);
+    }
     return temp_URL;
 }
 
@@ -3517,10 +3527,13 @@ LIBPQ_connect(ConnectionClass *self)
             opts[cnt] = "keepalives";
                 vals[cnt++] = "0";
         }
-        if (self->login_timeout > 0) {
-            SPRINTF_FIXED(login_timeout_str, "%u", (unsigned int) self->login_timeout);
+        if (ci->connect_timeout[0]) {
             opts[cnt] = "connect_timeout";
-            vals[cnt++] = login_timeout_str;
+            vals[cnt++] = ci->connect_timeout;
+        }
+        if (ci->rw_timeout[0]) {
+            opts[cnt] = "rw_timeout";
+            vals[cnt++] = ci->rw_timeout;
         }
         if (self->connInfo.keepalive_idle > 0) {
             ITOA_FIXED(keepalive_idle_str, self->connInfo.keepalive_idle);
