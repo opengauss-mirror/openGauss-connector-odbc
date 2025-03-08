@@ -623,6 +623,8 @@ typedef struct
 	char		translation_option[SMALL_REGISTRY_LEN];
 	char		password_required;
 	char		target_session_attrs[MEDIUM_REGISTRY_LEN];
+    char        connect_timeout[MEDIUM_REGISTRY_LEN];
+    char        rw_timeout[MEDIUM_REGISTRY_LEN];
 	pgNAME		conn_settings;
 	pgNAME		pqopt;
 	signed char	allow_keyset;
