@@ -55,6 +55,8 @@ extern "C" {
 #define INI_USERNAME			"Username"	/* Default User Name */
 #define INI_PASSWORD			"Password"	/* Default Password */
 #define TARGET_SESSION_ATTRS		"target_session_attrs"	/* Default target_session_attrs */
+#define CONNECT_TIMEOUT		"connect_timeout"	/* Default connect_timeout */
+#define RW_TIMEOUT		    "rw_timeout"	/* Default rw_timeout */
 
 #define	INI_ABBREVIATE			"CX"
 #define INI_DEBUG			"Debug"		/* Debug flag */
