@@ -976,6 +976,12 @@ MYLOG(0, "drivername=%s\n", drivername);
     if (SQLGetPrivateProfileString(DSN, TARGET_SESSION_ATTRS, NULL_STRING, temp, sizeof(temp), ODBC_INI) > 0)
         STRCPY_FIXED(ci->target_session_attrs, temp);
 
+    if (SQLGetPrivateProfileString(DSN, CONNECT_TIMEOUT, NULL_STRING, temp, sizeof(temp), ODBC_INI) > 0)
+        STRCPY_FIXED(ci->connect_timeout, temp);
+
+    if (SQLGetPrivateProfileString(DSN, RW_TIMEOUT, NULL_STRING, temp, sizeof(temp), ODBC_INI) > 0)
+        STRCPY_FIXED(ci->rw_timeout, temp);
+
 	SQLGetPrivateProfileString(DSN, INI_PROTOCOL, ENTRY_TEST, temp, sizeof(temp), ODBC_INI);
 	if (strcmp(temp, ENTRY_TEST))	/* entry exists */
 	{
@@ -1266,6 +1272,16 @@ writeDSNinfo(const ConnInfo *ci)
 								 TARGET_SESSION_ATTRS,
 								 ci->target_session_attrs,
 								 ODBC_INI);
+
+    SQLWritePrivateProfileString(DSN,
+                                 CONNECT_TIMEOUT,
+                                 ci->connect_timeout,
+                                 ODBC_INI);
+
+    SQLWritePrivateProfileString(DSN,
+                                 RW_TIMEOUT,
+                                 ci->rw_timeout,
+                                 ODBC_INI);
 
 	SQLWritePrivateProfileString(DSN,
 								 INI_READONLY,
