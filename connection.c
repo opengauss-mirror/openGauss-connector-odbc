@@ -3425,6 +3425,116 @@ char* generate_conninfo_URL_by_ConnInfo(ConnInfo* ci, int* host_number, int* por
         strcat(rw_timeout, ci->rw_timeout);
         strcat(temp_URL, rw_timeout);
     }
+    if ('\0' != ci->client_encoding[0]) {
+        char client_encoding[MEDIUM_REGISTRY_LEN] = "&client_encoding=";
+        strcat(client_encoding, ci->client_encoding);
+        strcat(temp_URL, client_encoding);
+    }
+    if ('\0' != ci->application_name[0]) {
+        char application_name[MEDIUM_REGISTRY_LEN] = "&application_name=";
+        strcat(application_name, ci->application_name);
+        strcat(temp_URL, application_name);
+    }
+    if ('\0' != ci->keepalives_idle[0]) {
+        char keepalives_idle[MEDIUM_REGISTRY_LEN] = "&keepalives_idle=";
+        strcat(keepalives_idle, ci->keepalives_idle);
+        strcat(temp_URL, keepalives_idle);
+    }
+    if ('\0' != ci->keepalives_interval[0]) {
+        char keepalives_interval[MEDIUM_REGISTRY_LEN] = "&keepalives_interval=";
+        strcat(keepalives_interval, ci->keepalives_interval);
+        strcat(temp_URL, keepalives_interval);
+    }
+    if ('\0' != ci->keepalives_count[0]) {
+        char keepalives_count[MEDIUM_REGISTRY_LEN] = "&keepalives_count=";
+        strcat(keepalives_count, ci->keepalives_count);
+        strcat(temp_URL, keepalives_count);
+    }
+    if ('\0' != ci->tcp_user_timeout[0]) {
+        char tcp_user_timeout[MEDIUM_REGISTRY_LEN] = "&tcp_user_timeout=";
+        strcat(tcp_user_timeout, ci->tcp_user_timeout);
+        strcat(temp_URL, tcp_user_timeout);
+    }
+    if ('\0' != ci->sslcompression[0]) {
+        char sslcompression[MEDIUM_REGISTRY_LEN] = "&sslcompression=";
+        strcat(sslcompression, ci->sslcompression);
+        strcat(temp_URL, sslcompression);
+    }
+    if ('\0' != ci->sslcert[0]) {
+        char sslcert[MEDIUM_REGISTRY_LEN] = "&sslcert=";
+        strcat(sslcert, ci->sslcert);
+        strcat(temp_URL, sslcert);
+    }
+    if ('\0' != ci->sslkey[0]) {
+        char sslkey[MEDIUM_REGISTRY_LEN] = "&sslkey=";
+        strcat(sslkey, ci->sslkey);
+        strcat(temp_URL, sslkey);
+    }
+    if ('\0' != ci->sslrootcert[0]) {
+        char sslrootcert[MEDIUM_REGISTRY_LEN] = "&sslrootcert=";
+        strcat(sslrootcert, ci->sslrootcert);
+        strcat(temp_URL, sslrootcert);
+    }
+    if ('\0' != ci->sslcrl[0]) {
+        char sslcrl[MEDIUM_REGISTRY_LEN] = "&sslcrl=";
+        strcat(sslcrl, ci->sslcrl);
+        strcat(temp_URL, sslcrl);
+    }
+    if ('\0' != ci->requirepeer[0]) {
+        char requirepeer[MEDIUM_REGISTRY_LEN] = "&requirepeer=";
+        strcat(requirepeer, ci->requirepeer);
+        strcat(temp_URL, requirepeer);
+    }
+    if ('\0' != ci->krbsrvname[0]) {
+        char krbsrvname[MEDIUM_REGISTRY_LEN] = "&krbsrvname=";
+        strcat(krbsrvname, ci->krbsrvname);
+        strcat(temp_URL, krbsrvname);
+    }
+    if ('\0' != ci->gsslib[0]) {
+        char gsslib[MEDIUM_REGISTRY_LEN] = "&gsslib=";
+        strcat(gsslib, ci->gsslib);
+        strcat(temp_URL, gsslib);
+    }
+    if ('\0' != ci->service[0]) {
+        char service[MEDIUM_REGISTRY_LEN] = "&service=";
+        strcat(service, ci->service);
+        strcat(temp_URL, service);
+    }
+    if ('\0' != ci->remote_nodename[0]) {
+        char remote_nodename[MEDIUM_REGISTRY_LEN] = "&remote_nodename=";
+        strcat(remote_nodename, ci->remote_nodename);
+        strcat(temp_URL, remote_nodename);
+    }
+    if ('\0' != ci->localhost[0]) {
+        char localhost[MEDIUM_REGISTRY_LEN] = "&localhost=";
+        strcat(localhost, ci->localhost);
+        strcat(temp_URL, localhost);
+    }
+    if ('\0' != ci->localport[0]) {
+        char localport[MEDIUM_REGISTRY_LEN] = "&localport=";
+        strcat(localport, ci->localport);
+        strcat(temp_URL, localport);
+    }
+    if ('\0' != ci->replication[0]) {
+        char replication[MEDIUM_REGISTRY_LEN] = "&replication=";
+        strcat(replication, ci->replication);
+        strcat(temp_URL, replication);
+    }
+    if ('\0' != ci->backend_version[0]) {
+        char backend_version[MEDIUM_REGISTRY_LEN] = "&backend_version=";
+        strcat(backend_version, ci->backend_version);
+        strcat(temp_URL, backend_version);
+    }
+    if ('\0' != ci->prototype[0]) {
+        char prototype[MEDIUM_REGISTRY_LEN] = "&prototype=";
+        strcat(prototype, ci->prototype);
+        strcat(temp_URL, prototype);
+    }
+    if ('\0' != ci->enable_ce[0]) {
+        char enable_ce[MEDIUM_REGISTRY_LEN] = "&enable_ce=";
+        strcat(enable_ce, ci->enable_ce);
+        strcat(temp_URL, enable_ce);
+    }
     return temp_URL;
 }
 
@@ -3535,15 +3645,101 @@ LIBPQ_connect(ConnectionClass *self)
             opts[cnt] = "rw_timeout";
             vals[cnt++] = ci->rw_timeout;
         }
-        if (self->connInfo.keepalive_idle > 0) {
-            ITOA_FIXED(keepalive_idle_str, self->connInfo.keepalive_idle);
+        if (ci->keepalive_idle > 0) {
+            ITOA_FIXED(keepalive_idle_str, ci->keepalive_idle);
             opts[cnt] = "keepalives_idle";
             vals[cnt++] = keepalive_idle_str;
+        } else if ('\0' != ci->keepalives_idle[0]) {
+            opts[cnt] = "keepalives_idle";
+            vals[cnt++] = ci->keepalives_idle;
         }
-        if (self->connInfo.keepalive_interval > 0) {
-            ITOA_FIXED(keepalive_interval_str, self->connInfo.keepalive_interval);
+        if (ci->keepalive_interval > 0) {
+            ITOA_FIXED(keepalive_interval_str, ci->keepalive_interval);
             opts[cnt] = "keepalives_interval";
             vals[cnt++] = keepalive_interval_str;
+        } else if ('\0' != ci->keepalives_interval[0]) {
+            opts[cnt] = "keepalives_interval";
+            vals[cnt++] = ci->keepalives_interval;
+        }
+        if ('\0' != ci->keepalives_count[0]) {
+            opts[cnt] = "keepalives_count";
+            vals[cnt++] = ci->keepalives_count;
+        }
+        if ('\0' != ci->client_encoding[0]) {
+            opts[cnt] = "client_encoding";
+            vals[cnt++] = ci->client_encoding;
+        }
+        if ('\0' != ci->application_name[0]) {
+            opts[cnt] = "application_name";
+            vals[cnt++] = ci->application_name;
+        }
+        if ('\0' != ci->tcp_user_timeout[0]) {
+            opts[cnt] = "tcp_user_timeout";
+            vals[cnt++] = ci->tcp_user_timeout;
+        }
+        if ('\0' != ci->sslcompression[0]) {
+            opts[cnt] = "sslcompression";
+            vals[cnt++] = ci->sslcompression;
+        }
+        if ('\0' != ci->sslcert[0]) {
+            opts[cnt] = "sslcert";
+            vals[cnt++] = ci->sslcert;
+        }
+        if ('\0' != ci->sslkey[0]) {
+            opts[cnt] = "sslkey";
+            vals[cnt++] = ci->sslkey;
+        }
+        if ('\0' != ci->sslrootcert[0]) {
+            opts[cnt] = "sslrootcert";
+            vals[cnt++] = ci->sslrootcert;
+        }
+        if ('\0' != ci->sslcrl[0]) {
+            opts[cnt] = "sslcrl";
+            vals[cnt++] = ci->sslcrl;
+        }
+        if ('\0' != ci->requirepeer[0]) {
+            opts[cnt] = "requirepeer";
+            vals[cnt++] = ci->requirepeer;
+        }
+        if ('\0' != ci->krbsrvname[0]) {
+            opts[cnt] = "krbsrvname";
+            vals[cnt++] = ci->krbsrvname;
+        }
+        if ('\0' != ci->gsslib[0]) {
+            opts[cnt] = "gsslib";
+            vals[cnt++] = ci->gsslib;
+        }
+        if ('\0' != ci->service[0]) {
+            opts[cnt] = "service";
+            vals[cnt++] = ci->service;
+        }
+        if ('\0' != ci->remote_nodename[0]) {
+            opts[cnt] = "remote_nodename";
+            vals[cnt++] = ci->remote_nodename;
+        }
+        if ('\0' != ci->localhost[0]) {
+            opts[cnt] = "localhost";
+            vals[cnt++] = ci->localhost;
+        }
+        if ('\0' != ci->localport[0]) {
+            opts[cnt] = "localport";
+            vals[cnt++] = ci->localport;
+        }
+        if ('\0' != ci->replication[0]) {
+            opts[cnt] = "replication";
+            vals[cnt++] = ci->replication;
+        }
+        if ('\0' != ci->backend_version[0]) {
+            opts[cnt] = "backend_version";
+            vals[cnt++] = ci->backend_version;
+        }
+        if ('\0' != ci->prototype[0]) {
+            opts[cnt] = "prototype";
+            vals[cnt++] = ci->prototype;
+        }
+        if ('\0' != ci->enable_ce[0]) {
+            opts[cnt] = "enable_ce";
+            vals[cnt++] = ci->enable_ce;
         }
         if ((odbcVersionString != NULL) && (odbcVersionString[0] != '\0')) {
             if (self->connInfo.connection_extra_info > 0) {

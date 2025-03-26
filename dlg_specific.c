@@ -982,6 +982,72 @@ MYLOG(0, "drivername=%s\n", drivername);
     if (SQLGetPrivateProfileString(DSN, RW_TIMEOUT, NULL_STRING, temp, sizeof(temp), ODBC_INI) > 0)
         STRCPY_FIXED(ci->rw_timeout, temp);
 
+    if (SQLGetPrivateProfileString(DSN, KEEPALIVES_IDLE, NULL_STRING, temp, sizeof(temp), ODBC_INI) > 0)
+        STRCPY_FIXED(ci->keepalives_idle, temp);
+    
+    if (SQLGetPrivateProfileString(DSN, KEEPALIVES_INTERVAL, NULL_STRING, temp, sizeof(temp), ODBC_INI) > 0)
+        STRCPY_FIXED(ci->keepalives_interval, temp);
+
+    if (SQLGetPrivateProfileString(DSN, KEEPALIVES_COUNT, NULL_STRING, temp, sizeof(temp), ODBC_INI) > 0)
+        STRCPY_FIXED(ci->keepalives_count, temp);
+
+    if (SQLGetPrivateProfileString(DSN, CLIENT_ENCODING, NULL_STRING, temp, sizeof(temp), ODBC_INI) > 0)
+        STRCPY_FIXED(ci->client_encoding, temp);
+    
+    if (SQLGetPrivateProfileString(DSN, APPLICATION_NAME, NULL_STRING, temp, sizeof(temp), ODBC_INI) > 0)
+        STRCPY_FIXED(ci->application_name, temp);
+
+    if (SQLGetPrivateProfileString(DSN, TCP_USER_TIMEOUT, NULL_STRING, temp, sizeof(temp), ODBC_INI) > 0)
+        STRCPY_FIXED(ci->tcp_user_timeout, temp);
+
+    if (SQLGetPrivateProfileString(DSN, SSLCOMPRESSION, NULL_STRING, temp, sizeof(temp), ODBC_INI) > 0)
+        STRCPY_FIXED(ci->sslcompression, temp);
+    
+    if (SQLGetPrivateProfileString(DSN, SSLCERT, NULL_STRING, temp, sizeof(temp), ODBC_INI) > 0)
+        STRCPY_FIXED(ci->sslcert, temp);
+
+    if (SQLGetPrivateProfileString(DSN, SSLKEY, NULL_STRING, temp, sizeof(temp), ODBC_INI) > 0)
+        STRCPY_FIXED(ci->sslkey, temp);
+
+    if (SQLGetPrivateProfileString(DSN, SSLROOTCERT, NULL_STRING, temp, sizeof(temp), ODBC_INI) > 0)
+        STRCPY_FIXED(ci->sslrootcert, temp);
+    
+    if (SQLGetPrivateProfileString(DSN, SSLCRL, NULL_STRING, temp, sizeof(temp), ODBC_INI) > 0)
+        STRCPY_FIXED(ci->sslcrl, temp);
+
+    if (SQLGetPrivateProfileString(DSN, REQUIREPEER, NULL_STRING, temp, sizeof(temp), ODBC_INI) > 0)
+        STRCPY_FIXED(ci->requirepeer, temp);
+
+    if (SQLGetPrivateProfileString(DSN, KRBSRVNAME, NULL_STRING, temp, sizeof(temp), ODBC_INI) > 0)
+        STRCPY_FIXED(ci->krbsrvname, temp);
+    
+    if (SQLGetPrivateProfileString(DSN, GSSLIB, NULL_STRING, temp, sizeof(temp), ODBC_INI) > 0)
+        STRCPY_FIXED(ci->gsslib, temp);
+
+    if (SQLGetPrivateProfileString(DSN, SERVICE, NULL_STRING, temp, sizeof(temp), ODBC_INI) > 0)
+        STRCPY_FIXED(ci->service, temp);
+
+    if (SQLGetPrivateProfileString(DSN, REMOTE_NODENAME, NULL_STRING, temp, sizeof(temp), ODBC_INI) > 0)
+        STRCPY_FIXED(ci->remote_nodename, temp);
+    
+    if (SQLGetPrivateProfileString(DSN, LOCALHOST, NULL_STRING, temp, sizeof(temp), ODBC_INI) > 0)
+        STRCPY_FIXED(ci->localhost, temp);
+
+    if (SQLGetPrivateProfileString(DSN, LOCALPORT, NULL_STRING, temp, sizeof(temp), ODBC_INI) > 0)
+        STRCPY_FIXED(ci->localport, temp);
+
+    if (SQLGetPrivateProfileString(DSN, REPLICATION, NULL_STRING, temp, sizeof(temp), ODBC_INI) > 0)
+        STRCPY_FIXED(ci->replication, temp);
+    
+    if (SQLGetPrivateProfileString(DSN, BACKEND_VERSION, NULL_STRING, temp, sizeof(temp), ODBC_INI) > 0)
+        STRCPY_FIXED(ci->backend_version, temp);
+
+    if (SQLGetPrivateProfileString(DSN, PROTOTYPE, NULL_STRING, temp, sizeof(temp), ODBC_INI) > 0)
+        STRCPY_FIXED(ci->prototype, temp);
+
+    if (SQLGetPrivateProfileString(DSN, ENABLE_CE, NULL_STRING, temp, sizeof(temp), ODBC_INI) > 0)
+        STRCPY_FIXED(ci->enable_ce, temp);
+    
 	SQLGetPrivateProfileString(DSN, INI_PROTOCOL, ENTRY_TEST, temp, sizeof(temp), ODBC_INI);
 	if (strcmp(temp, ENTRY_TEST))	/* entry exists */
 	{
@@ -1281,6 +1347,116 @@ writeDSNinfo(const ConnInfo *ci)
     SQLWritePrivateProfileString(DSN,
                                  RW_TIMEOUT,
                                  ci->rw_timeout,
+                                 ODBC_INI);
+
+    SQLWritePrivateProfileString(DSN,
+                                 KEEPALIVES_IDLE,
+                                 ci->keepalives_idle,
+                                 ODBC_INI);
+
+    SQLWritePrivateProfileString(DSN,
+                                 KEEPALIVES_INTERVAL,
+                                 ci->keepalives_interval,
+                                 ODBC_INI);
+
+    SQLWritePrivateProfileString(DSN,
+                                 KEEPALIVES_COUNT,
+                                 ci->keepalives_count,
+                                 ODBC_INI);
+
+    SQLWritePrivateProfileString(DSN,
+                                 CLIENT_ENCODING,
+                                 ci->client_encoding,
+                                 ODBC_INI);
+
+    SQLWritePrivateProfileString(DSN,
+                                 APPLICATION_NAME,
+                                 ci->application_name,
+                                 ODBC_INI);
+
+    SQLWritePrivateProfileString(DSN,
+                                 TCP_USER_TIMEOUT,
+                                 ci->tcp_user_timeout,
+                                 ODBC_INI);
+
+    SQLWritePrivateProfileString(DSN,
+                                 SSLCOMPRESSION,
+                                 ci->sslcompression,
+                                 ODBC_INI);
+
+    SQLWritePrivateProfileString(DSN,
+                                 SSLCERT,
+                                 ci->sslcert,
+                                 ODBC_INI);
+
+    SQLWritePrivateProfileString(DSN,
+                                 SSLKEY,
+                                 ci->sslkey,
+                                 ODBC_INI);
+
+    SQLWritePrivateProfileString(DSN,
+                                 SSLROOTCERT,
+                                 ci->sslrootcert,
+                                 ODBC_INI);
+
+    SQLWritePrivateProfileString(DSN,
+                                 SSLCRL,
+                                 ci->sslcrl,
+                                 ODBC_INI);
+
+    SQLWritePrivateProfileString(DSN,
+                                 REQUIREPEER,
+                                 ci->requirepeer,
+                                 ODBC_INI);
+
+    SQLWritePrivateProfileString(DSN,
+                                 KRBSRVNAME,
+                                 ci->krbsrvname,
+                                 ODBC_INI);
+
+    SQLWritePrivateProfileString(DSN,
+                                 GSSLIB,
+                                 ci->gsslib,
+                                 ODBC_INI);
+
+    SQLWritePrivateProfileString(DSN,
+                                 SERVICE,
+                                 ci->service,
+                                 ODBC_INI);
+
+    SQLWritePrivateProfileString(DSN,
+                                 REMOTE_NODENAME,
+                                 ci->remote_nodename,
+                                 ODBC_INI);
+
+    SQLWritePrivateProfileString(DSN,
+                                 LOCALHOST,
+                                 ci->localhost,
+                                 ODBC_INI);
+
+    SQLWritePrivateProfileString(DSN,
+                                 LOCALPORT,
+                                 ci->localport,
+                                 ODBC_INI);
+
+    SQLWritePrivateProfileString(DSN,
+                                 REPLICATION,
+                                 ci->replication,
+                                 ODBC_INI);
+
+    SQLWritePrivateProfileString(DSN,
+                                 BACKEND_VERSION,
+                                 ci->backend_version,
+                                 ODBC_INI);
+
+    SQLWritePrivateProfileString(DSN,
+                                 PROTOTYPE,
+                                 ci->prototype,
+                                 ODBC_INI);
+
+    SQLWritePrivateProfileString(DSN,
+                                 ENABLE_CE,
+                                 ci->enable_ce,
                                  ODBC_INI);
 
 	SQLWritePrivateProfileString(DSN,
