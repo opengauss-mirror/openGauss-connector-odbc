@@ -163,27 +163,7 @@ HDBC	XAConnection::ActivateConnection(void)
 	mylog("first SQLDriverConnect return=%d sqlstate=%s error=%s\n", ret, sqlstate, errmsg);
 	sqlState = (char *) sqlstate;
 	errMsg = (char *) errmsg;
-	if (!AuthenticationError())
-	{
-		SQLFreeHandle(SQL_HANDLE_DBC, xaconn);
-		return NULL;
-	}
-	sqlState.empty();
-	errMsg.empty();
-	ret = SQLDriverConnect(xaconn, NULL,
-		 (SQLCHAR *) (dsnstr + ";Username=postgres;Password=postgres;sslmode=allow").c_str(), SQL_NTS, NULL, SQL_NULL_DATA, NULL, SQL_DRIVER_COMPLETE);
-	if (SQL_SUCCEEDED(ret))
-	{
-		mylog("second SQLDriverConnect success\n");
-		return xaconn;
-	}
-
-	SQLGetDiagRec(SQL_HANDLE_DBC, xaconn,
-			1, sqlstate, NULL, errmsg,
-			sizeof(errmsg), NULL);
-	mylog("second SQLDriverConnect return=%d sqlstate=%s error=%s\n", ret, sqlstate, errmsg);
-	sqlState = (char *) sqlstate;
-	errMsg = (char *) errmsg;
+    SQLFreeHandle(SQL_HANDLE_DBC, xaconn);
 	return NULL;
 }
 
