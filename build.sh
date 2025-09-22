@@ -154,6 +154,7 @@ os_version=$(cat /etc/os-release | grep -w VERSION_ID | awk -F '"' '{print $2}')
 declare version_string="${mppdb_name}-${version_number}"
 declare odbc_package_name="${version_string}-${dist_version}${os_version}-${arch}.tar.gz"
 declare windows_odbc_package_name="${version_string}-Windows-Odbc.tar.gz"
+declare odbc_symbols_name="${mppdb_name}-Symbols-${version_number}-${dist_version}${os_version}-${arch}.tar.gz"
 
 echo "[makeodbc] $(date +%y-%m-%d' '%T): script dir : ${LOCAL_DIR}"
 declare LOG_FILE="${LOCAL_DIR}/build.log"
@@ -261,6 +262,32 @@ function select_package_command()
     esac
 }
 
+function separate_strip_info()
+{
+    curpath=$(pwd)
+    SYMBOL_BASE=${BUILD_DIR}/symbols
+    mkdir -p $SYMBOL_BASE/lib
+    mkdir -p $SYMBOL_BASE/odbc/lib
+
+    libdirs=(lib odbc/lib)
+    for libdir in "${libdirs[@]}"; do
+        echo "separate strip info at path ${libdir}"
+        cd ${BUILD_DIR}/${libdir}
+        for file in $(ls); do
+            if [[ "$file" = *".so" || "$file" = *".so."* ]]; then
+                objcopy --only-keep-debug "$file" "$file".symbol
+                objcopy --strip-all "$file" "$file"_release
+                rm "$file"
+                mv "$file"_release "$file"
+                objcopy --add-gnu-debuglink="$file".symbol "$file"
+                mv "$file".symbol ${SYMBOL_BASE}/${libdir}
+            fi
+        done
+    done
+    cd ${curpath}
+}
+
+
 ###############################################################
 ##  copy the target to set path
 ###############################################################
@@ -268,6 +295,9 @@ function target_file_copy()
 {
     rm -rf ${BUILD_DIR}/lib
     mkdir ${BUILD_DIR}/lib
+
+    cp $UNIX_ODBC/lib/libodb* ${BUILD_DIR}/lib
+    separate_strip_info
 
     #copy libraries into lib
     cp $SERVERLIBS_PATH/lib/libpq* ${BUILD_DIR}/lib
@@ -281,8 +311,7 @@ function target_file_copy()
     cp $SERVERLIBS_PATH/lib/libconfig* ${BUILD_DIR}/lib
     cp $SERVERLIBS_PATH/lib/libpgport_tool* ${BUILD_DIR}/lib
     cp $SERVERLIBS_PATH/lib/libcom_err_gauss* ${BUILD_DIR}/lib
-
-    cp $UNIX_ODBC/lib/libodb* ${BUILD_DIR}/lib
+    
 }
 
 #######################################################################
@@ -302,8 +331,9 @@ function make_package()
     if [ $? -ne 0 ]; then
         die "$package_command ${odbc_package_name} failed"
     fi
+    $package_command "${odbc_symbols_name}" ./symbols >>"$LOG_FILE" 2>&1
 
-    mv ${odbc_package_name} ${BUILD_DIR}/
+    mv ${odbc_package_name} ${odbc_symbols_name} ${BUILD_DIR}/
 
     echo "install odbc tools is ${odbc_package_name} of ${BUILD_DIR} directory " >> "$LOG_FILE" 2>&1
     echo "success!"
