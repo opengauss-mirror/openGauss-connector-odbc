@@ -59,7 +59,7 @@ fi
 
 ##default install version storage path
 declare mppdb_name='openGauss-ODBC'
-declare version_number='6.0.2'
+declare version_number='6.0.3'
 #######################################################################
 ## print help information
 #######################################################################
