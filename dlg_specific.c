@@ -510,6 +510,13 @@ MYLOG(DETAIL_LOG_LEVEL, "hlen=" FORMAT_SSIZE_T "\n", hlen);
 				flag);
 		}
 	}
+	if (olen < nlen && ci->autosave == AUTOSAVE_INTERNAL)
+	{
+		hlen = strlen(connect_string);
+		nlen = MAX_CONNECT_STRING - hlen;
+		olen = snprintf(&connect_string[hlen], nlen, ";"
+			INI_AUTOSAVE "=internal");
+	}
 	if (olen < 0 || olen >= nlen) /* failed */
 		connect_string[0] = '\0';
 
@@ -777,6 +784,14 @@ copyConnAttributes(ConnInfo *ci, const char *attribute, char *value)
 		STRCPY_FIXED(ci->drivers.extra_systable_prefixes, value);
 	else if (stricmp(attribute, INI_FOREXTENSIONCONNECTOR) == 0)
 		ci->drivers.for_extension_connector = atoi(value);
+	else if (stricmp(attribute, INI_AUTOSAVE) == 0 || stricmp(attribute, ABBR_AUTOSAVE) == 0)
+	{
+		if (stricmp(value, "internal") == 0)
+			ci->autosave = AUTOSAVE_INTERNAL;
+		else
+			ci->autosave = AUTOSAVE_UNSPECIFIED;
+		printed = TRUE;
+	}
 	else if (stricmp(attribute, INI_CONNECTIONEXTRAINFO) == 0)
 		ci->connection_extra_info = atoi(value);
 	else
@@ -1059,6 +1074,12 @@ MYLOG(0, "drivername=%s\n", drivername);
 			ci->rollback_on_error = atoi(ptr + 1);
 			MYLOG(0, "rollback_on_error=%d\n", ci->rollback_on_error);
 		}
+	}
+
+	if (SQLGetPrivateProfileString(DSN, INI_AUTOSAVE, NULL_STRING, temp, sizeof(temp), ODBC_INI) > 0)
+	{
+		if (stricmp(temp, "internal") == 0)
+			ci->autosave = AUTOSAVE_INTERNAL;
 	}
 
 	SQLGetPrivateProfileString(DSN, INI_CONNSETTINGS, ENTRY_TEST, temp, sizeof(temp), ODBC_INI);
@@ -1491,6 +1512,11 @@ writeDSNinfo(const ConnInfo *ci)
 	SQLWritePrivateProfileString(DSN,
 								 INI_PROTOCOL,
 								 temp,
+								 ODBC_INI);
+
+	SQLWritePrivateProfileString(DSN,
+								 INI_AUTOSAVE,
+								 ci->autosave == AUTOSAVE_INTERNAL ? "internal" : NULL_STRING,
 								 ODBC_INI);
 
 	SQLWritePrivateProfileString(DSN,
@@ -1993,6 +2019,7 @@ CC_conninfo_init(ConnInfo *conninfo, UInt4 option)
 	conninfo->backend_support_batch_proto = -1;
 	conninfo->lower_case_identifier = -1;
 	conninfo->rollback_on_error = -1;
+	conninfo->autosave = AUTOSAVE_UNSPECIFIED;
 	conninfo->force_abbrev_connstr = -1;
 	conninfo->bde_environment = -1;
 	conninfo->fake_mss = -1;
@@ -2090,6 +2117,7 @@ CC_copy_conninfo(ConnInfo *ci, const ConnInfo *sci)
 	CORR_VALCPY(use_server_side_prepare);
 	CORR_VALCPY(lower_case_identifier);
 	CORR_VALCPY(rollback_on_error);
+	CORR_VALCPY(autosave);
 	CORR_VALCPY(force_abbrev_connstr);
 	CORR_VALCPY(bde_environment);
 	CORR_VALCPY(fake_mss);
