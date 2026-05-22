@@ -681,7 +681,7 @@ MYLOG(DETAIL_LOG_LEVEL, "entering %p->external=%d\n", stmt, stmt->external);
 	if (conn)
 		ci = &conn->connInfo;
 
-	if (ci && ci->autosave == AUTOSAVE_INTERNAL)
+	if (CC_uses_protocol_autosave(conn))
 	{
 		ret = (conn && PG_VERSION_LT(conn, 8.0)) ? 1 : 2;
 	}

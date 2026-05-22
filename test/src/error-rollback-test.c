@@ -226,5 +226,29 @@ main(int argc, char **argv)
 	/* Clean up */
 	error_rollback_clean();
 
+	/*
+	 * Test for autosave internal
+	 * Same behavior as statement rollback, but internal savepoints are sent
+	 * through the savepoint protocol packet instead of SQL SAVEPOINT.
+	 */
+	printf("Test for autosave internal\n");
+	error_rollback_init("Autosave=internal");
+
+	error_rollback_exec_success(1);
+	error_rollback_exec_success(2);
+	error_rollback_exec_failure(-1);
+	error_rollback_exec_success(3);
+	error_rollback_exec_success(4);
+	error_rollback_exec_failure(-1);
+	error_rollback_exec_failure(-1);
+	error_rollback_exec_success(5);
+	error_rollback_exec_proccall_failure();
+	error_rollback_exec_success(6);
+	error_rollback_exec_success(7);
+	error_rollback_print();
+
+	/* Clean up */
+	error_rollback_clean();
+
 	return 0;
 }
