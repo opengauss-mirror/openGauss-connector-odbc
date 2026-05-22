@@ -2238,23 +2238,19 @@ CC_send_protocol_savepoint(ConnectionClass *self, BOOL rollback, BOOL sync, BOOL
 		return 0;
 	}
 
-	if (PQflush(self->pqconn))
-	{
-		CC_set_error(self, CONNECTION_COMMUNICATION_ERROR,
-			PQerrorMessage(self->pqconn), func);
-		return 0;
-	}
-
 	while ((pgres = PQgetResult(self->pqconn)) != NULL)
 	{
 		switch (PQresultStatus(pgres))
 		{
 			case PGRES_COMMAND_OK:
-			case PGRES_NONFATAL_ERROR:
 				ret = 1;
 				break;
+			case PGRES_NONFATAL_ERROR:
+				handle_pgres_error(self, pgres, func, NULL, FALSE);
+				break;
 			default:
-				handle_pgres_error(self, pgres, func, NULL, !ret);
+				ret = 0;
+				handle_pgres_error(self, pgres, func, NULL, TRUE);
 				break;
 		}
 		PQclear(pgres);
@@ -2329,6 +2325,8 @@ CC_internal_rollback(ConnectionClass *self, int rollback_type, BOOL ignore_abort
 					default:
 						handle_pgres_error(self, pgres, __FUNCTION__, NULL, !ret);
 				}
+				PQclear(pgres);
+				pgres = NULL;
 			}
 			if (!ret)
 			{
@@ -2384,6 +2382,7 @@ CC_send_query_append(ConnectionClass *self, const char *query, QueryInfo *qi, UD
 			discard_next_savepoint = FALSE,
 			discard_next_release = FALSE,
 			discard_protocol_savepoint = FALSE,
+			protocol_savepoint_queued = FALSE,
 			consider_rollback;
 	BOOL	discardTheRest = FALSE;
 	int		func_cs_count = 0;
@@ -2497,6 +2496,7 @@ CC_send_query_append(ConnectionClass *self, const char *query, QueryInfo *qi, UD
 			if (!CC_queue_protocol_savepoint(self, FALSE, func))
 				goto cleanup;
 			discard_protocol_savepoint = TRUE;
+			protocol_savepoint_queued = TRUE;
 		}
 		else
 		{
@@ -2511,6 +2511,8 @@ CC_send_query_append(ConnectionClass *self, const char *query, QueryInfo *qi, UD
 			if (!CC_queue_protocol_savepoint(self, FALSE, func))
 				goto cleanup;
 			self->internal_op = SAVEPOINT_IN_PROGRESS;
+			discard_protocol_savepoint = TRUE;
+			protocol_savepoint_queued = TRUE;
 		}
 		else
 		{
@@ -2578,14 +2580,38 @@ CC_send_query_append(ConnectionClass *self, const char *query, QueryInfo *qi, UD
 		int status = PQresultStatus(pgres);
 
 		if (discardTheRest)
-			continue;
-		if (discard_protocol_savepoint && status == PGRES_COMMAND_OK)
 		{
-			discard_protocol_savepoint = FALSE;
-MYLOG(DETAIL_LOG_LEVEL, "Discarded a protocol SAVEPOINT result\n");
 			PQclear(pgres);
 			pgres = NULL;
 			continue;
+		}
+		if (discard_protocol_savepoint)
+		{
+			if (status == PGRES_NONFATAL_ERROR)
+			{
+				/* Non-fatal warning before the savepoint OK - discard and keep waiting */
+				PQclear(pgres);
+				pgres = NULL;
+				continue;
+			}
+			/* COMMAND_OK: savepoint succeeded; error: stop discarding to allow error handling */
+			discard_protocol_savepoint = FALSE;
+			protocol_savepoint_queued = FALSE;
+			if (status == PGRES_COMMAND_OK || status == PGRES_EMPTY_QUERY)
+			{
+				if (SAVEPOINT_IN_PROGRESS == self->internal_op)
+				{
+					CC_start_rbpoint(self);
+					self->internal_op = 0;
+				}
+MYLOG(DETAIL_LOG_LEVEL, "Discarded a protocol SAVEPOINT result\n");
+				PQclear(pgres);
+				pgres = NULL;
+				continue;
+			}
+			if (SAVEPOINT_IN_PROGRESS == self->internal_op)
+				self->internal_op = 0;
+			/* Error case: fall through to normal error handling below */
 		}
 		switch (status)
 		{
@@ -2847,6 +2873,23 @@ cleanup:
 		PQclear(pgres);
 		pgres = NULL;
 	}
+		if (protocol_savepoint_queued && self->pqconn)
+		{
+			/*
+			 * A protocol savepoint was queued but never flushed/consumed
+			 * (PQsendQuery failed after the savepoint was queued).
+			 * Flush the stale savepoint, then queue a rollback+Sync
+			 * to drain the pipeline and restore protocol state.
+			 */
+			PQsendRollbackToSavepoint(self->pqconn);
+			PQsendProtocolSync(self->pqconn);
+			while ((pgres = PQgetResult(self->pqconn)) != NULL)
+			{
+				PQclear(pgres);
+				pgres = NULL;
+			}
+			protocol_savepoint_queued = FALSE;
+		}
 MYLOG(DETAIL_LOG_LEVEL, " rollback_on_error=%d CC_is_in_trans=%d discard_next_savepoint=%d query_rollback=%d\n", rollback_on_error, CC_is_in_trans(self), discard_next_savepoint, query_rollback);
 	if (rollback_on_error && CC_is_in_trans(self) && !discard_next_savepoint)
 	{
