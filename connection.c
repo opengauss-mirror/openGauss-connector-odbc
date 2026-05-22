@@ -2873,23 +2873,30 @@ cleanup:
 		PQclear(pgres);
 		pgres = NULL;
 	}
-		if (protocol_savepoint_queued && self->pqconn)
+	if (protocol_savepoint_queued && self->pqconn)
+	{
+		/*
+		 * A protocol savepoint was queued but never flushed/consumed
+		 * (PQsendQuery failed after the savepoint was queued).
+		 * Flush the stale savepoint, then queue a rollback+Sync
+		 * to drain the pipeline and restore protocol state.
+		 */
+		if (!PQsendRollbackToSavepoint(self->pqconn) ||
+			!PQsendProtocolSync(self->pqconn))
 		{
-			/*
-			 * A protocol savepoint was queued but never flushed/consumed
-			 * (PQsendQuery failed after the savepoint was queued).
-			 * Flush the stale savepoint, then queue a rollback+Sync
-			 * to drain the pipeline and restore protocol state.
-			 */
-			PQsendRollbackToSavepoint(self->pqconn);
-			PQsendProtocolSync(self->pqconn);
+			CC_set_error(self, CONNECTION_COMMUNICATION_ERROR,
+				PQerrorMessage(self->pqconn), func);
+		}
+		else
+		{
 			while ((pgres = PQgetResult(self->pqconn)) != NULL)
 			{
 				PQclear(pgres);
 				pgres = NULL;
 			}
-			protocol_savepoint_queued = FALSE;
 		}
+		protocol_savepoint_queued = FALSE;
+	}
 MYLOG(DETAIL_LOG_LEVEL, " rollback_on_error=%d CC_is_in_trans=%d discard_next_savepoint=%d query_rollback=%d\n", rollback_on_error, CC_is_in_trans(self), discard_next_savepoint, query_rollback);
 	if (rollback_on_error && CC_is_in_trans(self) && !discard_next_savepoint)
 	{

@@ -12803,7 +12803,103 @@ _ACEOF
 
 else
   as_fn_error $? "libpq with autosave=internal protocol extension is required.
-  The installed libpq is missing PQsendSavepoint/PQsendRollbackToSavepoint/PQsendProtocolSync.
+  The installed libpq is missing PQsendSavepoint.
+  These symbols were added in openGauss-server feat/autosave-internal branch.
+  Please rebuild against a libpq that includes the autosave protocol extension." "$LINENO" 5
+fi
+
+
+{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for PQsendRollbackToSavepoint in -lpq" >&5
+$as_echo_n "checking for PQsendRollbackToSavepoint in -lpq... " >&6; }
+if ${ac_cv_lib_pq_PQsendRollbackToSavepoint+:} false; then :
+  $as_echo_n "(cached) " >&6
+else
+  ac_check_lib_save_LIBS=$LIBS
+LIBS="-lpq  $LIBS"
+cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+
+#ifdef __cplusplus
+extern "C"
+#endif
+char PQsendRollbackToSavepoint ();
+int
+main ()
+{
+return PQsendRollbackToSavepoint ();
+  ;
+  return 0;
+}
+_ACEOF
+if ac_fn_c_try_link "$LINENO"; then :
+  ac_cv_lib_pq_PQsendRollbackToSavepoint=yes
+else
+  ac_cv_lib_pq_PQsendRollbackToSavepoint=no
+fi
+rm -f core conftest.err conftest.$ac_objext \
+    conftest$ac_exeext conftest.$ac_ext
+LIBS=$ac_check_lib_save_LIBS
+fi
+{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $ac_cv_lib_pq_PQsendRollbackToSavepoint" >&5
+$as_echo "$ac_cv_lib_pq_PQsendRollbackToSavepoint" >&6; }
+if test "x$ac_cv_lib_pq_PQsendRollbackToSavepoint" = xyes; then :
+  cat >>confdefs.h <<_ACEOF
+#define HAVE_LIBPQ 1
+_ACEOF
+
+  LIBS="-lpq $LIBS"
+
+else
+  as_fn_error $? "libpq with autosave=internal protocol extension is required.
+  The installed libpq is missing PQsendRollbackToSavepoint.
+  These symbols were added in openGauss-server feat/autosave-internal branch.
+  Please rebuild against a libpq that includes the autosave protocol extension." "$LINENO" 5
+fi
+
+
+{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for PQsendProtocolSync in -lpq" >&5
+$as_echo_n "checking for PQsendProtocolSync in -lpq... " >&6; }
+if ${ac_cv_lib_pq_PQsendProtocolSync+:} false; then :
+  $as_echo_n "(cached) " >&6
+else
+  ac_check_lib_save_LIBS=$LIBS
+LIBS="-lpq  $LIBS"
+cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+
+#ifdef __cplusplus
+extern "C"
+#endif
+char PQsendProtocolSync ();
+int
+main ()
+{
+return PQsendProtocolSync ();
+  ;
+  return 0;
+}
+_ACEOF
+if ac_fn_c_try_link "$LINENO"; then :
+  ac_cv_lib_pq_PQsendProtocolSync=yes
+else
+  ac_cv_lib_pq_PQsendProtocolSync=no
+fi
+rm -f core conftest.err conftest.$ac_objext \
+    conftest$ac_exeext conftest.$ac_ext
+LIBS=$ac_check_lib_save_LIBS
+fi
+{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $ac_cv_lib_pq_PQsendProtocolSync" >&5
+$as_echo "$ac_cv_lib_pq_PQsendProtocolSync" >&6; }
+if test "x$ac_cv_lib_pq_PQsendProtocolSync" = xyes; then :
+  cat >>confdefs.h <<_ACEOF
+#define HAVE_LIBPQ 1
+_ACEOF
+
+  LIBS="-lpq $LIBS"
+
+else
+  as_fn_error $? "libpq with autosave=internal protocol extension is required.
+  The installed libpq is missing PQsendProtocolSync.
   These symbols were added in openGauss-server feat/autosave-internal branch.
   Please rebuild against a libpq that includes the autosave protocol extension." "$LINENO" 5
 fi

@@ -211,7 +211,17 @@ AC_CHECK_LIB(pq, PQsetSingleRowMode, [],
 	      [AC_MSG_ERROR([libpq library version >= 9.2 is required])])
 AC_CHECK_LIB(pq, PQsendSavepoint, [],
 	      [AC_MSG_ERROR([libpq with autosave=internal protocol extension is required.
-  The installed libpq is missing PQsendSavepoint/PQsendRollbackToSavepoint/PQsendProtocolSync.
+  The installed libpq is missing PQsendSavepoint.
+  These symbols were added in openGauss-server feat/autosave-internal branch (libpq-fe.h).
+  Please rebuild against a libpq that includes the autosave protocol extension.])])
+AC_CHECK_LIB(pq, PQsendRollbackToSavepoint, [],
+	      [AC_MSG_ERROR([libpq with autosave=internal protocol extension is required.
+  The installed libpq is missing PQsendRollbackToSavepoint.
+  These symbols were added in openGauss-server feat/autosave-internal branch (libpq-fe.h).
+  Please rebuild against a libpq that includes the autosave protocol extension.])])
+AC_CHECK_LIB(pq, PQsendProtocolSync, [],
+	      [AC_MSG_ERROR([libpq with autosave=internal protocol extension is required.
+  The installed libpq is missing PQsendProtocolSync.
   These symbols were added in openGauss-server feat/autosave-internal branch (libpq-fe.h).
   Please rebuild against a libpq that includes the autosave protocol extension.])])
 
