@@ -2220,7 +2220,8 @@ int
 CC_send_protocol_savepoint(ConnectionClass *self, BOOL rollback, BOOL sync, BOOL ignore_abort, const char *func)
 {
 	PGresult *pgres = NULL;
-	int ret = 0;
+	/* Protocol savepoint packets are silent; no PGresult is success. */
+	int ret = 1;
 
 	if (!self || !self->pqconn)
 		return 0;
@@ -2235,6 +2236,7 @@ CC_send_protocol_savepoint(ConnectionClass *self, BOOL rollback, BOOL sync, BOOL
 	{
 		CC_set_error(self, CONNECTION_COMMUNICATION_ERROR,
 			PQerrorMessage(self->pqconn), func);
+		CC_on_abort(self, CONN_DEAD);
 		return 0;
 	}
 
@@ -2243,7 +2245,7 @@ CC_send_protocol_savepoint(ConnectionClass *self, BOOL rollback, BOOL sync, BOOL
 		switch (PQresultStatus(pgres))
 		{
 			case PGRES_COMMAND_OK:
-				ret = 1;
+			case PGRES_EMPTY_QUERY:
 				break;
 			case PGRES_NONFATAL_ERROR:
 				handle_pgres_error(self, pgres, func, NULL, FALSE);
@@ -2381,7 +2383,7 @@ CC_send_query_append(ConnectionClass *self, const char *query, QueryInfo *qi, UD
 			discard_next_begin = FALSE,
 			discard_next_savepoint = FALSE,
 			discard_next_release = FALSE,
-			discard_protocol_savepoint = FALSE,
+			protocol_statement_savepoint = FALSE,
 			protocol_savepoint_queued = FALSE,
 			consider_rollback;
 	BOOL	discardTheRest = FALSE;
@@ -2495,7 +2497,6 @@ CC_send_query_append(ConnectionClass *self, const char *query, QueryInfo *qi, UD
 		{
 			if (!CC_queue_protocol_savepoint(self, FALSE, func))
 				goto cleanup;
-			discard_protocol_savepoint = TRUE;
 			protocol_savepoint_queued = TRUE;
 		}
 		else
@@ -2509,9 +2510,12 @@ CC_send_query_append(ConnectionClass *self, const char *query, QueryInfo *qi, UD
 		if (CC_uses_protocol_autosave(self))
 		{
 			if (!CC_queue_protocol_savepoint(self, FALSE, func))
+			{
+				self->internal_op = 0;
 				goto cleanup;
+			}
 			self->internal_op = SAVEPOINT_IN_PROGRESS;
-			discard_protocol_savepoint = TRUE;
+			protocol_statement_savepoint = TRUE;
 			protocol_savepoint_queued = TRUE;
 		}
 		else
@@ -2553,6 +2557,17 @@ CC_send_query_append(ConnectionClass *self, const char *query, QueryInfo *qi, UD
 		CC_set_error(self, CONNECTION_COMMUNICATION_ERROR, errmsg, func);
 		goto cleanup;
 	}
+	protocol_savepoint_queued = FALSE;
+	/*
+	 * The protocol savepoint packet is silent. The first PGresult belongs to
+	 * the SQL query, so mark the local rollback point without discarding it.
+	 */
+	if (protocol_statement_savepoint &&
+		SAVEPOINT_IN_PROGRESS == self->internal_op)
+	{
+		CC_start_rbpoint(self);
+		self->internal_op = 0;
+	}
 	PQsetSingleRowMode(self->pqconn);
 
 	cmdres = qi ? qi->result_in : NULL;
@@ -2584,34 +2599,6 @@ CC_send_query_append(ConnectionClass *self, const char *query, QueryInfo *qi, UD
 			PQclear(pgres);
 			pgres = NULL;
 			continue;
-		}
-		if (discard_protocol_savepoint)
-		{
-			if (status == PGRES_NONFATAL_ERROR)
-			{
-				/* Non-fatal warning before the savepoint OK - discard and keep waiting */
-				PQclear(pgres);
-				pgres = NULL;
-				continue;
-			}
-			/* COMMAND_OK: savepoint succeeded; error: stop discarding to allow error handling */
-			discard_protocol_savepoint = FALSE;
-			protocol_savepoint_queued = FALSE;
-			if (status == PGRES_COMMAND_OK || status == PGRES_EMPTY_QUERY)
-			{
-				if (SAVEPOINT_IN_PROGRESS == self->internal_op)
-				{
-					CC_start_rbpoint(self);
-					self->internal_op = 0;
-				}
-MYLOG(DETAIL_LOG_LEVEL, "Discarded a protocol SAVEPOINT result\n");
-				PQclear(pgres);
-				pgres = NULL;
-				continue;
-			}
-			if (SAVEPOINT_IN_PROGRESS == self->internal_op)
-				self->internal_op = 0;
-			/* Error case: fall through to normal error handling below */
 		}
 		switch (status)
 		{
@@ -2897,6 +2884,9 @@ cleanup:
 		}
 		protocol_savepoint_queued = FALSE;
 	}
+	if (protocol_statement_savepoint &&
+		SAVEPOINT_IN_PROGRESS == self->internal_op)
+		self->internal_op = 0;
 MYLOG(DETAIL_LOG_LEVEL, " rollback_on_error=%d CC_is_in_trans=%d discard_next_savepoint=%d query_rollback=%d\n", rollback_on_error, CC_is_in_trans(self), discard_next_savepoint, query_rollback);
 	if (rollback_on_error && CC_is_in_trans(self) && !discard_next_savepoint)
 	{
