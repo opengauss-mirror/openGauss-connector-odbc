@@ -2197,6 +2197,14 @@ CC_from_PGresult(QResultClass *res, StatementClass *stmt,
 	return success;
 }
 
+BOOL
+CC_uses_protocol_autosave(const ConnectionClass *self)
+{
+	return self &&
+		self->connInfo.autosave == AUTOSAVE_INTERNAL &&
+		!self->connInfo.drivers.for_extension_connector;
+}
+
 static int
 CC_queue_protocol_savepoint(ConnectionClass *self, BOOL rollback, const char *func)
 {
