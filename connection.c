@@ -108,6 +108,25 @@ CnEntry pgxc_entry;
 static int LIBPQ_connect(ConnectionClass *self);
 int split_host_or_port_with_limit(const char *str, char *result_array[MAX_PARTS], int* total_length);
 char* generate_conninfo_URL_by_ConnInfo(ConnInfo* ci, int* host_number, int* port_number);
+
+static BOOL
+cn_entry_contains(const CnEntry *entry, const char *host, const char *port)
+{
+    int i;
+
+    if (entry == NULL || host == NULL || port == NULL) {
+        return FALSE;
+    }
+
+    for (i = 0; i < entry->ip_count && i < MAX_CN; i++) {
+        if (stricmp(entry->ip_list[i], host) == 0 &&
+            strcmp(entry->port_list[i], port) == 0) {
+            return TRUE;
+        }
+    }
+    return FALSE;
+}
+
 #ifdef WIN32
 DWORD WINAPI read_pgxc_node(LPVOID arg)
 #else
@@ -190,6 +209,10 @@ static void *read_pgxc_node(void *arg)
 		char port_list_temp[MAX_CN][SMALL_REGISTRY_LEN];
 		char port_temp[SMALL_REGISTRY_LEN];
 		while ((rc = SQLFetch(hStmt)) == SQL_SUCCESS) {
+            if (!cn_entry_contains(&orig_entry, node_host, node_port)) {
+                MYLOG(0, "Ignore unconfigured CN returned by pgxc_node: host=%s, port=%s\n", node_host, node_port);
+                continue;
+            }
 			refresh_flag = 1;
 			STRCPY_FIXED(IP_list_temp[count], node_host);
 			STRCPY_FIXED(port_list_temp[count++], node_port);
