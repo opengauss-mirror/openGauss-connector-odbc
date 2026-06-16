@@ -156,9 +156,10 @@ static void *read_pgxc_node(void *arg)
 		SQLHSTMT hStmt = SQL_NULL_HSTMT;
 		SQLRETURN rc = SQL_SUCCESS;
 		SQLINTEGER RETCODE = 0;
-		char node_port[SMALL_REGISTRY_LEN];
-		char node_host[lenNameType];
-		SQLLEN lenPort=0, lenHost=0;
+        char node_port[SMALL_REGISTRY_LEN];
+        char node_host[lenNameType + 1];
+        SQLLEN lenPort = 0;
+        SQLLEN lenHost = 0;
 		RETCODE = SQLAllocHandle(SQL_HANDLE_ENV, SQL_NULL_HANDLE, &hEnv);
 		if (RETCODE != SQL_SUCCESS) {
 			continue;
@@ -204,20 +205,26 @@ static void *read_pgxc_node(void *arg)
 			SQLFreeHandle(SQL_HANDLE_ENV, hEnv);
 			continue;
 		}
-		int count = 0;
-		char IP_list_temp[MAX_CN][MEDIUM_REGISTRY_LEN];
-		char port_list_temp[MAX_CN][SMALL_REGISTRY_LEN];
-		char port_temp[SMALL_REGISTRY_LEN];
-		while ((rc = SQLFetch(hStmt)) == SQL_SUCCESS) {
+        int count = 0;
+        int overflow = 0;
+        char IP_list_temp[MAX_CN][MEDIUM_REGISTRY_LEN];
+        char port_list_temp[MAX_CN][SMALL_REGISTRY_LEN];
+        while ((rc = SQLFetch(hStmt)) == SQL_SUCCESS) {
             if (!cn_entry_contains(&orig_entry, node_host, node_port)) {
                 MYLOG(0, "Ignore unconfigured CN returned by pgxc_node: host=%s, port=%s\n", node_host, node_port);
                 continue;
             }
-			refresh_flag = 1;
-			STRCPY_FIXED(IP_list_temp[count], node_host);
-			STRCPY_FIXED(port_list_temp[count++], node_port);
-			pgxc_entry.ip_count = count;
-		}
+            if (count >= MAX_CN) {
+                overflow = 1;
+                rc = SQL_ERROR;
+                MYLOG(0, "pgxc_node returned more than %d configured CN rows, skip refresh.\n", MAX_CN);
+                break;
+            }
+            refresh_flag = 1;
+            STRCPY_FIXED(IP_list_temp[count], node_host);
+            STRCPY_FIXED(port_list_temp[count], node_port);
+            count++;
+        }
 		refresh_count++;
 
 		if (refresh_count > 10 && rc == SQL_ERROR) {
@@ -225,23 +232,25 @@ static void *read_pgxc_node(void *arg)
 			MYLOG(0, "Refresh failed for ten times, change signal and unlock other threads.\n");
 		}
 
-		int i;
-		if (count != 0 && pthread_rwlock_wrlock(&pgxc_entry.ip_list_lock) == 0) {
-			for (i = 0; i < pgxc_entry.ip_count; i++) {
-				STRCPY_FIXED(pgxc_entry.ip_list[i], IP_list_temp[i]);
-				STRCPY_FIXED(pgxc_entry.port_list[i], port_list_temp[i]);
-				MYLOG(0, "ip = %s, port = %s\n", pgxc_entry.ip_list[i], pgxc_entry.port_list[i]);
-			}
-			MYLOG(0, "CN list has been refreshed.\n");
-			if (pthread_rwlock_unlock(&pgxc_entry.ip_list_lock) != 0) {
-				SQLFreeHandle(SQL_HANDLE_STMT, hStmt);
-				SQLDisconnect(hDbc);
-				SQLFreeHandle(SQL_HANDLE_DBC, hDbc);
-				SQLFreeHandle(SQL_HANDLE_ENV, hEnv);
-				MYLOG(0, "Unlock failed. Exit process.\n");
-				exit(1);
-			}
-		}
+        int i;
+        if (!overflow && count != 0 && pthread_rwlock_wrlock(&pgxc_entry.ip_list_lock) == 0) {
+            pgxc_entry.ip_count = count;
+            pgxc_entry.port_count = count;
+            for (i = 0; i < count; i++) {
+                STRCPY_FIXED(pgxc_entry.ip_list[i], IP_list_temp[i]);
+                STRCPY_FIXED(pgxc_entry.port_list[i], port_list_temp[i]);
+                MYLOG(0, "ip = %s, port = %s\n", pgxc_entry.ip_list[i], pgxc_entry.port_list[i]);
+            }
+            MYLOG(0, "CN list has been refreshed.\n");
+            if (pthread_rwlock_unlock(&pgxc_entry.ip_list_lock) != 0) {
+                SQLFreeHandle(SQL_HANDLE_STMT, hStmt);
+                SQLDisconnect(hDbc);
+                SQLFreeHandle(SQL_HANDLE_DBC, hDbc);
+                SQLFreeHandle(SQL_HANDLE_ENV, hEnv);
+                MYLOG(0, "Unlock failed. Exit process.\n");
+                exit(1);
+            }
+        }
 		SQLDisconnect(hDbc);
 		sleep(time);
 	}
@@ -323,6 +332,10 @@ static RETCODE init_conn(ConnectionClass *conn)
 	/* parsing ci->server to seperate IPs and store them into IP_list */
 	char *p = strtok(server, ",");
 	while (p != NULL) {
+        if (orig_entry.ip_count >= MAX_CN) {
+            MYLOG(0, "The number of configured IPs exceeds the limit %d.\n", MAX_CN);
+            return SQL_ERROR;
+        }
 		STRCPY_FIXED(orig_entry.ip_list[orig_entry.ip_count++], p);
 		STRCPY_FIXED(pgxc_entry.ip_list[pgxc_entry.ip_count++], p);
 		p = strtok(NULL, ",");
@@ -331,6 +344,10 @@ static RETCODE init_conn(ConnectionClass *conn)
 	/* parsing ci->port to seperate PORTs and store them into port_list */
 	p = strtok(port, ",");
 	while (p != NULL) {
+        if (orig_entry.port_count >= MAX_CN) {
+            MYLOG(0, "The number of configured ports exceeds the limit %d.\n", MAX_CN);
+            return SQL_ERROR;
+        }
 		STRCPY_FIXED(orig_entry.port_list[orig_entry.port_count++], p);
 		STRCPY_FIXED(pgxc_entry.port_list[pgxc_entry.port_count++], p);
 		p = strtok(NULL, ",");
