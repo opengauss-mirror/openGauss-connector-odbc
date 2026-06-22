@@ -3359,6 +3359,12 @@ char* generate_conninfo_URL_by_ConnInfo(ConnInfo* ci, int* host_number, int* por
     char *port_array[MAX_PARTS] = {0};
     int host_length = 0;
     int port_length = 0;
+    int valid_count;
+    int i;
+    PQExpBufferData urlbuf = {0};
+    BOOL urlbuf_initialized = FALSE;
+    char *result = NULL;
+
     if (!ci->server || !ci->port) {
         return NULL;
     }
@@ -3367,175 +3373,161 @@ char* generate_conninfo_URL_by_ConnInfo(ConnInfo* ci, int* host_number, int* por
 
     if ((-1 == *host_number || -1 == *port_number) ||
         ((*host_number != *port_number) && *host_number != 1 && *port_number != 1)) {
-        for (int i = 0; i < MAX_PARTS; i++) {
-            if (host_array[i] != NULL) {
-                free(host_array[i]);
-            }
-            if (port_array[i] != NULL) {
-                free(port_array[i]);
-            }
-        }
-        return NULL;
+        goto cleanup;
     }
 
-    size_t total_length = host_length + port_length + *host_number * 2 + *port_number * 2 +
-                          (ci->username ? strlen(ci->username) : 0) +
-                          (ci->password.name ? strlen(ci->password.name) : 0) +
-                          (ci->database ? strlen(ci->database) : 0) + EXTRA_ROOM;
-    char* temp_URL = (char*)malloc(total_length);
-    if (!temp_URL) {
-        return NULL;
-    }
-    memset(temp_URL, 0, total_length);
-    int valid_count = *host_number > *port_number ? *host_number : *port_number;
+    valid_count = *host_number > *port_number ? *host_number : *port_number;
 
-    (void)snprintf(temp_URL, -1, "postgres://%s@", ci->username);
-    for (int i = 0; i < valid_count; i++) {
-        strcat(temp_URL, (*host_number == 1) ? host_array[0] : host_array[i]);
-        strcat(temp_URL, ":");
-        strcat(temp_URL, (*port_number == 1) ? port_array[0] : port_array[i]);
+    initPQExpBuffer(&urlbuf);
+    urlbuf_initialized = TRUE;
+    appendPQExpBuffer(&urlbuf, "postgres://%s@", ci->username ? ci->username : "");
+    for (i = 0; i < valid_count; i++) {
+        appendPQExpBuffer(&urlbuf, "%s:%s",
+                          (*host_number == 1) ? host_array[0] : host_array[i],
+                          (*port_number == 1) ? port_array[0] : port_array[i]);
         if (i != valid_count - 1) {
-            strcat(temp_URL, ",");
+            appendPQExpBufferStr(&urlbuf, ",");
         }
     }
-    strcat(temp_URL, "/");
-    strcat(temp_URL, ci->database);
-    char target_session_attrs[MEDIUM_REGISTRY_LEN] = "?target_session_attrs=";
+    appendPQExpBuffer(&urlbuf, "/%s", ci->database ? ci->database : "");
+
     if (*host_number == 1 && *port_number == 1) {
-        strcat(target_session_attrs, "any");
+        appendPQExpBufferStr(&urlbuf, "?target_session_attrs=any");
     } else if ('\0' == ci->target_session_attrs[0]) {
-        strcat(target_session_attrs, "read-write");
+        appendPQExpBufferStr(&urlbuf, "?target_session_attrs=read-write");
     } else {
-        strcat(target_session_attrs, ci->target_session_attrs);
+        appendPQExpBuffer(&urlbuf, "?target_session_attrs=%s", ci->target_session_attrs);
     }
-    strcat(temp_URL, target_session_attrs);
-    strcat(temp_URL, "&password=");
-    strcat(temp_URL, ci->password.name);
-    if ('\0' != ci->sslmode) {
-        strcat(temp_URL, "&sslmode=");
-        strcat(temp_URL, ci->sslmode);
+
+    appendPQExpBuffer(&urlbuf, "&password=%s", SAFE_NAME(ci->password));
+
+    if ('\0' != ci->sslmode[0]) {
+        appendPQExpBuffer(&urlbuf, "&sslmode=%s", ci->sslmode);
     }
     if ('\0' != ci->connect_timeout[0]) {
-        char connect_timeout[MEDIUM_REGISTRY_LEN] = "&connect_timeout=";
-        strcat(connect_timeout, ci->connect_timeout);
-        strcat(temp_URL, connect_timeout);
+        appendPQExpBuffer(&urlbuf, "&connect_timeout=%s", ci->connect_timeout);
     }
     if ('\0' != ci->rw_timeout[0]) {
-        char rw_timeout[MEDIUM_REGISTRY_LEN] = "&rw_timeout=";
-        strcat(rw_timeout, ci->rw_timeout);
-        strcat(temp_URL, rw_timeout);
+        appendPQExpBuffer(&urlbuf, "&rw_timeout=%s", ci->rw_timeout);
     }
     if ('\0' != ci->client_encoding[0]) {
-        char client_encoding[MEDIUM_REGISTRY_LEN] = "&client_encoding=";
-        strcat(client_encoding, ci->client_encoding);
-        strcat(temp_URL, client_encoding);
+        appendPQExpBuffer(&urlbuf, "&client_encoding=%s", ci->client_encoding);
     }
     if ('\0' != ci->application_name[0]) {
-        char application_name[MEDIUM_REGISTRY_LEN] = "&application_name=";
-        strcat(application_name, ci->application_name);
-        strcat(temp_URL, application_name);
+        appendPQExpBuffer(&urlbuf, "&application_name=%s", ci->application_name);
     }
     if ('\0' != ci->keepalives_idle[0]) {
-        char keepalives_idle[MEDIUM_REGISTRY_LEN] = "&keepalives_idle=";
-        strcat(keepalives_idle, ci->keepalives_idle);
-        strcat(temp_URL, keepalives_idle);
+        appendPQExpBuffer(&urlbuf, "&keepalives_idle=%s", ci->keepalives_idle);
     }
     if ('\0' != ci->keepalives_interval[0]) {
-        char keepalives_interval[MEDIUM_REGISTRY_LEN] = "&keepalives_interval=";
-        strcat(keepalives_interval, ci->keepalives_interval);
-        strcat(temp_URL, keepalives_interval);
+        appendPQExpBuffer(&urlbuf, "&keepalives_interval=%s", ci->keepalives_interval);
     }
     if ('\0' != ci->keepalives_count[0]) {
-        char keepalives_count[MEDIUM_REGISTRY_LEN] = "&keepalives_count=";
-        strcat(keepalives_count, ci->keepalives_count);
-        strcat(temp_URL, keepalives_count);
+        appendPQExpBuffer(&urlbuf, "&keepalives_count=%s", ci->keepalives_count);
     }
     if ('\0' != ci->tcp_user_timeout[0]) {
-        char tcp_user_timeout[MEDIUM_REGISTRY_LEN] = "&tcp_user_timeout=";
-        strcat(tcp_user_timeout, ci->tcp_user_timeout);
-        strcat(temp_URL, tcp_user_timeout);
+        appendPQExpBuffer(&urlbuf, "&tcp_user_timeout=%s", ci->tcp_user_timeout);
     }
     if ('\0' != ci->sslcompression[0]) {
-        char sslcompression[MEDIUM_REGISTRY_LEN] = "&sslcompression=";
-        strcat(sslcompression, ci->sslcompression);
-        strcat(temp_URL, sslcompression);
+        appendPQExpBuffer(&urlbuf, "&sslcompression=%s", ci->sslcompression);
     }
     if ('\0' != ci->sslcert[0]) {
-        char sslcert[MEDIUM_REGISTRY_LEN] = "&sslcert=";
-        strcat(sslcert, ci->sslcert);
-        strcat(temp_URL, sslcert);
+        appendPQExpBuffer(&urlbuf, "&sslcert=%s", ci->sslcert);
     }
     if ('\0' != ci->sslkey[0]) {
-        char sslkey[MEDIUM_REGISTRY_LEN] = "&sslkey=";
-        strcat(sslkey, ci->sslkey);
-        strcat(temp_URL, sslkey);
+        appendPQExpBuffer(&urlbuf, "&sslkey=%s", ci->sslkey);
     }
     if ('\0' != ci->sslrootcert[0]) {
-        char sslrootcert[MEDIUM_REGISTRY_LEN] = "&sslrootcert=";
-        strcat(sslrootcert, ci->sslrootcert);
-        strcat(temp_URL, sslrootcert);
+        appendPQExpBuffer(&urlbuf, "&sslrootcert=%s", ci->sslrootcert);
     }
     if ('\0' != ci->sslcrl[0]) {
-        char sslcrl[MEDIUM_REGISTRY_LEN] = "&sslcrl=";
-        strcat(sslcrl, ci->sslcrl);
-        strcat(temp_URL, sslcrl);
+        appendPQExpBuffer(&urlbuf, "&sslcrl=%s", ci->sslcrl);
     }
     if ('\0' != ci->requirepeer[0]) {
-        char requirepeer[MEDIUM_REGISTRY_LEN] = "&requirepeer=";
-        strcat(requirepeer, ci->requirepeer);
-        strcat(temp_URL, requirepeer);
+        appendPQExpBuffer(&urlbuf, "&requirepeer=%s", ci->requirepeer);
     }
     if ('\0' != ci->krbsrvname[0]) {
-        char krbsrvname[MEDIUM_REGISTRY_LEN] = "&krbsrvname=";
-        strcat(krbsrvname, ci->krbsrvname);
-        strcat(temp_URL, krbsrvname);
+        appendPQExpBuffer(&urlbuf, "&krbsrvname=%s", ci->krbsrvname);
     }
     if ('\0' != ci->gsslib[0]) {
-        char gsslib[MEDIUM_REGISTRY_LEN] = "&gsslib=";
-        strcat(gsslib, ci->gsslib);
-        strcat(temp_URL, gsslib);
+        appendPQExpBuffer(&urlbuf, "&gsslib=%s", ci->gsslib);
     }
     if ('\0' != ci->service[0]) {
-        char service[MEDIUM_REGISTRY_LEN] = "&service=";
-        strcat(service, ci->service);
-        strcat(temp_URL, service);
+        appendPQExpBuffer(&urlbuf, "&service=%s", ci->service);
     }
     if ('\0' != ci->remote_nodename[0]) {
-        char remote_nodename[MEDIUM_REGISTRY_LEN] = "&remote_nodename=";
-        strcat(remote_nodename, ci->remote_nodename);
-        strcat(temp_URL, remote_nodename);
+        appendPQExpBuffer(&urlbuf, "&remote_nodename=%s", ci->remote_nodename);
     }
     if ('\0' != ci->localhost[0]) {
-        char localhost[MEDIUM_REGISTRY_LEN] = "&localhost=";
-        strcat(localhost, ci->localhost);
-        strcat(temp_URL, localhost);
+        appendPQExpBuffer(&urlbuf, "&localhost=%s", ci->localhost);
     }
     if ('\0' != ci->localport[0]) {
-        char localport[MEDIUM_REGISTRY_LEN] = "&localport=";
-        strcat(localport, ci->localport);
-        strcat(temp_URL, localport);
+        appendPQExpBuffer(&urlbuf, "&localport=%s", ci->localport);
     }
     if ('\0' != ci->replication[0]) {
-        char replication[MEDIUM_REGISTRY_LEN] = "&replication=";
-        strcat(replication, ci->replication);
-        strcat(temp_URL, replication);
+        appendPQExpBuffer(&urlbuf, "&replication=%s", ci->replication);
     }
     if ('\0' != ci->backend_version[0]) {
-        char backend_version[MEDIUM_REGISTRY_LEN] = "&backend_version=";
-        strcat(backend_version, ci->backend_version);
-        strcat(temp_URL, backend_version);
+        appendPQExpBuffer(&urlbuf, "&backend_version=%s", ci->backend_version);
     }
     if ('\0' != ci->prototype[0]) {
-        char prototype[MEDIUM_REGISTRY_LEN] = "&prototype=";
-        strcat(prototype, ci->prototype);
-        strcat(temp_URL, prototype);
+        appendPQExpBuffer(&urlbuf, "&prototype=%s", ci->prototype);
     }
     if ('\0' != ci->enable_ce[0]) {
-        char enable_ce[MEDIUM_REGISTRY_LEN] = "&enable_ce=";
-        strcat(enable_ce, ci->enable_ce);
-        strcat(temp_URL, enable_ce);
+        appendPQExpBuffer(&urlbuf, "&enable_ce=%s", ci->enable_ce);
     }
-    return temp_URL;
+
+    if (PQExpBufferDataBroken(urlbuf)) {
+        goto cleanup;
+    }
+    result = strdup(urlbuf.data);
+
+cleanup:
+    if (urlbuf_initialized)
+        termPQExpBuffer(&urlbuf);
+    for (i = 0; i < MAX_PARTS; i++) {
+        if (host_array[i] != NULL) {
+            free(host_array[i]);
+        }
+        if (port_array[i] != NULL) {
+            free(port_array[i]);
+        }
+    }
+    return result;
+}
+static char *
+hide_url_password(const char *url)
+{
+	char	*outurl;
+	const char *sensitive[] = {"password", "sslcert", "sslkey", "sslrootcert", "sslcrl", NULL};
+	int		 i;
+
+	if (!url)
+		return NULL;
+	outurl = strdup(url);
+	if (!outurl)
+		return NULL;
+
+	for (i = 0; sensitive[i]; i++)
+	{
+		const char *param = sensitive[i];
+		size_t		plen = strlen(param) + 1;	/* include trailing '=' */
+		char	   *p = outurl;
+
+		while ((p = strstr(p, param)) != NULL)
+		{
+			/* mask only proper query parameters: ?param=... or &param=... */
+			if ((p == outurl || p[-1] == '?' || p[-1] == '&') && p[plen - 1] == '=')
+			{
+				char	*v;
+
+				for (v = p + plen; *v && *v != '&'; v++)
+					*v = 'x';
+			}
+			p++;
+		}
+	}
+	return outurl;
 }
 
 static int
@@ -3588,7 +3580,9 @@ LIBPQ_connect(ConnectionClass *self)
         }
     }
     if (host_number > 1 || port_number > 1) {
-        MYLOG(0, "connecting to the database using URL: %s\n", URL);
+        char	*redacted_url = hide_url_password(URL);
+        MYLOG(0, "connecting to the database using URL: %s\n", redacted_url ? redacted_url : "(NULL)");
+        free(redacted_url);
         pqconn = PQconnectdb(URL);
     } else {
         /* Build arrays of keywords & values, for PQconnectDBParams */

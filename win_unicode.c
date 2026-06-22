@@ -146,7 +146,16 @@ MYLOG(0, "%p ilen=" FORMAT_LEN " ", ucs2str, ilen);
 		little_endian = (0 != ((char *) &crt)[0]);
 	}
 	if (ilen < 0)
-		ilen = ucs2strlen(ucs2str);
+	{
+		if (ilen == SQL_NTS)
+			ilen = ucs2strlen(ucs2str);
+		else
+		{
+			if (olen)
+				*olen = SQL_ERROR;
+			return NULL;
+		}
+	}
 MYPRINTF(0, " newlen=" FORMAT_LEN, ilen);
 	utf8str = (char *) malloc(ilen * 4 + 1);
 	if (utf8str)

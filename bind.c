@@ -56,6 +56,12 @@ PGAPI_BindParameter(HSTMT hstmt,
 	}
 	SC_clear_error(stmt);
 
+	if (ipar == 0)
+	{
+		SC_set_error(stmt, DESC_BAD_PARAMETER_NUMBER_ERROR, "Parameter number must be >= 1", func);
+		return SQL_ERROR;
+	}
+
 	apdopts = SC_get_APDF(stmt);
 	if (apdopts->allocated < ipar)
 		extend_parameter_bindings(apdopts, ipar);
