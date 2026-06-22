@@ -814,12 +814,6 @@ QR_prepare_for_tupledata(QResultClass *self)
 MYLOG(DETAIL_LOG_LEVEL, "entering %p->num_fields=%d\n", self, self->num_fields);
 	if (!QR_get_cursor(self))
 	{
-		static SQLULEN dbg_count = 0;
-		if (++dbg_count <= 5 || dbg_count % 100000 == 0)
-			fprintf(stderr, "DEBUG QR_prepare: call=%lu num_total_rows=%lu allocated=%lu\n",
-				(unsigned long) dbg_count,
-				(unsigned long) num_total_rows,
-				(unsigned long) self->count_backend_allocated);
 
 		if (self->num_fields > 0 &&
 		    num_total_rows >= self->count_backend_allocated)
@@ -831,7 +825,6 @@ MYLOG(DETAIL_LOG_LEVEL, "entering %p->num_fields=%d\n", self, self->num_fields);
 				tuple_size = TUPLE_MALLOC_INC;
 			else if (tuple_size >= QR_MAX_BACKEND_TUPLES / 2)
 			{
-				fprintf(stderr, "DEBUG QR_prepare: CAP HIT allocated=%lu\n", (unsigned long) self->count_backend_allocated);
 				QR_set_rstatus(self, PORES_FATAL_ERROR);
 				QR_set_message(self, "Result set exceeds maximum allowed rows");
 				return FALSE;

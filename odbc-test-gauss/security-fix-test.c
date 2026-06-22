@@ -535,13 +535,17 @@ check_log_redaction(const char *password,
 		}
 
 		if ((strstr(line, "PWD=") && strstr(line, "PWD=xxxxx")) ||
-			strstr(line, "password=xxxxx"))
+		    strstr(line, "password=xxxxx") ||
+		    strstr(line, "password='xxxxx'"))
 			found_pwd_masked = 1;
-		if (strstr(line, "sslcert=") && strstr(line, "sslcert=xxxx"))
+		if (strstr(line, "sslcert=") &&
+		    (strstr(line, "sslcert=xxxx") || strstr(line, "sslcert='xxxx'")))
 			found_sslcert_masked = 1;
-		if (strstr(line, "sslkey=") && strstr(line, "sslkey=xxxx"))
+		if (strstr(line, "sslkey=") &&
+		    (strstr(line, "sslkey=xxxx") || strstr(line, "sslkey='xxxx'")))
 			found_sslkey_masked = 1;
-		if (strstr(line, "sslrootcert=") && strstr(line, "sslrootcert=xxxx"))
+		if (strstr(line, "sslrootcert=") &&
+		    (strstr(line, "sslrootcert=xxxx") || strstr(line, "sslrootcert='xxxx'")))
 			found_sslrootcert_masked = 1;
 	}
 	fclose(fp);

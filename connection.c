@@ -2648,6 +2648,8 @@ MYLOG(DETAIL_LOG_LEVEL, "Discarded a RELEASE result\n");
 					else
 					{
 						aborted = TRUE;
+						discardTheRest = TRUE;
+						ReadyToReturn = TRUE;
 						if (QR_command_maybe_successful(res))
 							retres = NULL;
 						else
@@ -3786,7 +3788,14 @@ LIBPQ_connect(ConnectionClass *self)
             const char **popt, **pval;
             QLOG(0, "PQconnectdbParams:");
             for (popt = opts, pval = vals; *popt; popt++, pval++) {
-                QPRINTF(0, " %s='%s'", *popt, *pval);
+                if (stricmp(*popt, "password") == 0)
+                    QPRINTF(0, " %s='xxxxx'", *popt);
+                else if (stricmp(*popt, "sslcert") == 0 ||
+                         stricmp(*popt, "sslkey") == 0 ||
+                         stricmp(*popt, "sslrootcert") == 0)
+                    QPRINTF(0, " %s='xxxx'", *popt);
+                else
+                    QPRINTF(0, " %s='%s'", *popt, *pval);
             }
             QPRINTF(0, "\n");
         }
