@@ -71,6 +71,7 @@ ifndef cases
 		odbc_transaction_03 \
 		notice-test \
 		dataatexecution-test \
+		security-fix-test \
 		odbc_getresult-test \
 		params-test \
 		prepare-test \
