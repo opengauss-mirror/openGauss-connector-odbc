@@ -830,7 +830,11 @@ MYLOG(DETAIL_LOG_LEVEL, "entering %p->num_fields=%d\n", self, self->num_fields);
 				return FALSE;
 			}
 			else
+			{
 				tuple_size *= 2;
+				if (tuple_size > QR_MAX_BACKEND_TUPLES / 2)
+					tuple_size = QR_MAX_BACKEND_TUPLES / 2;
+			}
 			QR_REALLOC_return_with_error(self->backend_tuples, TupleField, tuple_size * self->num_fields * sizeof(TupleField), self, "Out of memory while reading tuples.", FALSE);
 			self->count_backend_allocated = tuple_size;
 		}
@@ -848,7 +852,11 @@ MYLOG(DETAIL_LOG_LEVEL, "entering %p->num_fields=%d\n", self, self->num_fields);
 				return FALSE;
 			}
 			else
+			{
 				tuple_size *= 2;
+				if (tuple_size > QR_MAX_BACKEND_TUPLES / 2)
+					tuple_size = QR_MAX_BACKEND_TUPLES / 2;
+			}
 			QR_REALLOC_return_with_error(self->keyset, KeySet, sizeof(KeySet) * tuple_size, self, "Out of mwmory while allocating keyset", FALSE);
 			memset(&self->keyset[self->count_keyset_allocated],
 				   0,
