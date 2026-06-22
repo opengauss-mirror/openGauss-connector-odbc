@@ -456,12 +456,11 @@ static RETCODE connect_random_IP(ConnectionClass *conn, CnEntry *entry)
         return SQL_ERROR;
     }
 
+    if (pthread_rwlock_rdlock(&entry->ip_list_lock) != 0) {
+        return SQL_ERROR;
+    }
 	/* only connection successful and all connection failed will break the while loop */
 	while (ret == SQL_ERROR) {
-        if (pthread_rwlock_rdlock(&entry->ip_list_lock) != 0) {
-            return SQL_ERROR;
-        }
-
         ind = get_location(visited, entry, &visited_count);
         if (ind == -1) {
             pthread_rwlock_unlock(&entry->ip_list_lock);
@@ -470,9 +469,6 @@ static RETCODE connect_random_IP(ConnectionClass *conn, CnEntry *entry)
 
         STRCPY_FIXED(server, entry->ip_list[ind]);
         STRCPY_FIXED(port, entry->port_list[ind]);
-        if (pthread_rwlock_unlock(&entry->ip_list_lock) != 0) {
-            return SQL_ERROR;
-        }
         STRCPY_FIXED(ci->server, server);
         STRCPY_FIXED(ci->port, port);
 		if ((fchar = CC_connect(conn, NULL)) <= 0) {
@@ -483,6 +479,9 @@ static RETCODE connect_random_IP(ConnectionClass *conn, CnEntry *entry)
 			ret = SQL_SUCCESS;
 		}
 	}
+    if (pthread_rwlock_unlock(&entry->ip_list_lock) != 0) {
+        return SQL_ERROR;
+    }
 	if (ret == SQL_SUCCESS && fchar == 2) {
 		ret = SQL_SUCCESS_WITH_INFO;
 	}
