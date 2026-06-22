@@ -27,5 +27,7 @@ extern void print_diag(char *msg, SQLSMALLINT htype, SQLHANDLE handle);
 extern void test_connect_ext(char *extraparams);
 extern void test_connect(void);
 extern void test_disconnect(void);
+extern void test_disconnect_keep_env(void);
+extern void test_free_env(void);
 extern void print_result_meta(HSTMT hstmt);
 extern void print_result(HSTMT hstmt);

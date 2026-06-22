@@ -29,9 +29,36 @@ test_connect_ext(char *extraparams)
 	SQLCHAR str[1024];
 	SQLSMALLINT strl;
 	SQLCHAR dsn[1024];
+	const char *driver = getenv("ODBC_DRIVER");
 
-	snprintf(dsn, sizeof(dsn), "DSN=gaussdb;username=odbc;password=Gauss@123;%s",
-			 extraparams ? extraparams : "");
+	if (driver && driver[0])
+	{
+		const char *server = getenv("ODBC_SERVER");
+		const char *port = getenv("ODBC_PORT");
+		const char *database = getenv("ODBC_DATABASE");
+
+		if (!server || !server[0])
+			server = "127.0.0.1";
+		if (!port || !port[0])
+			port = "5432";
+		if (!database || !database[0])
+			database = "postgres";
+
+		/*
+		 * unixODBC may ignore a DRIVER keyword when a DSN keyword is also
+		 * present, so use DRIVER-only when overriding the driver binary.
+		 */
+		snprintf(dsn, sizeof(dsn),
+				 "DRIVER=%s;SERVER=%s;PORT=%s;DATABASE=%s;"
+				 "username=odbc;password=Gauss@123;%s",
+				 driver, server, port, database,
+				 extraparams ? extraparams : "");
+	}
+	else
+	{
+		snprintf(dsn, sizeof(dsn), "DSN=gaussdb;username=odbc;password=Gauss@123;%s",
+				 extraparams ? extraparams : "");
+	}
 
 	SQLAllocHandle(SQL_HANDLE_ENV, SQL_NULL_HANDLE, &env);
 
@@ -56,7 +83,7 @@ test_connect(void)
 }
 
 void
-test_disconnect(void)
+test_disconnect_keep_env(void)
 {
 	SQLRETURN rc;
 
@@ -75,6 +102,12 @@ test_disconnect(void)
 		exit(1);
 	}
 	conn = NULL;
+}
+
+void
+test_free_env(void)
+{
+	SQLRETURN rc;
 
 	rc = SQLFreeEnv(env);
 	if (!SQL_SUCCEEDED(rc))
@@ -83,6 +116,13 @@ test_disconnect(void)
 		exit(1);
 	}
 	env = NULL;
+}
+
+void
+test_disconnect(void)
+{
+	test_disconnect_keep_env();
+	test_free_env();
 }
 
 static const char *

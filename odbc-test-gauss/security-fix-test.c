@@ -7,6 +7,10 @@
 
 #include "common.h"
 
+#ifdef WIN32
+#include <sqlucode.h>
+#endif
+
 /*
  * Regression tests for security fixes in odbc-brainafk/漏洞清单.csv rows 7-15.
  *
@@ -15,6 +19,16 @@
  * Run:
  *   ./security-fix-test
  *
+ * Environment:
+ *   ODBC_DRIVER   - optional absolute path to a driver .so to load instead of
+ *                   the one configured in the gaussdb DSN.
+ *   ODBC_SERVER   - server to use with ODBC_DRIVER (default 127.0.0.1)
+ *   ODBC_PORT     - port to use with ODBC_DRIVER (default 5432)
+ *   ODBC_DATABASE - database to use with ODBC_DRIVER (default postgres)
+ *
+ *   Example:
+ *     ODBC_DRIVER=$PWD/../output/odbc/lib/psqlodbcw.so ./security-fix-test
+ *
  * Note: tests that exercise connection-string parsing assume a reachable
  * gaussdb DSN as configured in common.c. Some checks are best-effort and
  * print warnings instead of failing when the runtime environment does not
@@ -22,7 +36,7 @@
  *
  * Coverage note:
  *   - Vulnerability #9 (SQLConnectW length validation in win_unicode.c) is
- *     Windows-specific and not exercised by this Linux gcc/unixODBC test set.
+ *     exercised only on Windows builds; the test is compiled out on Linux.
  */
 
 static void
@@ -47,7 +61,8 @@ test_bind_parameter_zero(void)
 	}
 	printf("OK: SQLBindParameter(ipar=0) returned SQL_ERROR as expected\n");
 
-	SQLFreeStmt(hstmt, SQL_DROP);
+	rc = SQLFreeStmt(hstmt, SQL_DROP);
+	CHECK_STMT_RESULT(rc, "SQLFreeStmt failed", hstmt);
 }
 
 static void
@@ -86,7 +101,15 @@ test_sqlputdata_negative_length(void)
 	}
 	printf("OK: SQLPutData(..., -2) returned SQL_ERROR as expected\n");
 
-	SQLFreeStmt(hstmt, SQL_DROP);
+	/*
+	 * The statement is still in the data-at-execution state.  Cancel it before
+	 * freeing so the connection can be cleanly disconnected.
+	 */
+	rc = SQLCancel(hstmt);
+	CHECK_STMT_RESULT(rc, "SQLCancel failed after SQLPutData error", hstmt);
+
+	rc = SQLFreeStmt(hstmt, SQL_DROP);
+	CHECK_STMT_RESULT(rc, "SQLFreeStmt failed", hstmt);
 }
 
 static void
@@ -142,21 +165,170 @@ test_descriptor_uaf(void)
 	}
 	printf("OK: statement reused after freeing user descriptor without UAF\n");
 
-	SQLFreeStmt(hstmt, SQL_DROP);
+	rc = SQLFreeStmt(hstmt, SQL_DROP);
+	CHECK_STMT_RESULT(rc, "SQLFreeStmt failed", hstmt);
+}
+
+/*
+ * Build a connection string that optionally loads a specific driver binary
+ * via the ODBC_DRIVER environment variable. When ODBC_DRIVER is set, the
+ * DSN keyword is omitted so unixODBC cannot fall back to the DSN's driver;
+ * server/port/database are taken from ODBC_SERVER/ODBC_PORT/ODBC_DATABASE
+ * (defaulting to 127.0.0.1:5432/postgres).
+ */
+static void
+build_connect_string(char *buf, size_t bufsize, const char *extra)
+{
+	const char *driver = getenv("ODBC_DRIVER");
+
+	if (driver && driver[0])
+	{
+		const char *server = getenv("ODBC_SERVER");
+		const char *port = getenv("ODBC_PORT");
+		const char *database = getenv("ODBC_DATABASE");
+
+		if (!server || !server[0])
+			server = "127.0.0.1";
+		if (!port || !port[0])
+			port = "5432";
+		if (!database || !database[0])
+			database = "postgres";
+
+		snprintf(buf, bufsize,
+				 "DRIVER=%s;SERVER=%s;PORT=%s;DATABASE=%s;"
+				 "UID=odbc;PWD=Gauss@123;%s",
+				 driver, server, port, database,
+				 extra ? extra : "");
+	}
+	else
+	{
+		snprintf(buf, bufsize,
+				 "DSN=gaussdb;UID=odbc;PWD=Gauss@123;%s",
+				 extra ? extra : "");
+	}
+}
+
+/*
+ * Print MYLOG lines from this process that contain any of the given
+ * keywords. Used for diagnostics when the cap test fails.
+ */
+static void
+dump_mylog_lines(const char *keywords)
+{
+	char filename[PATH_MAX];
+	char line[8192];
+	const char *username;
+	pid_t pid = getpid();
+	FILE *fp;
+
+	username = getenv("USER");
+	if (!username)
+		username = getenv("LOGNAME");
+	if (!username)
+		username = "unknown";
+
+	snprintf(filename, sizeof(filename),
+			 "/tmp/mylog_security-fix-test_%s%u.log", username, (unsigned) pid);
+
+	fp = fopen(filename, "r");
+	if (!fp)
+	{
+		printf("WARN: could not open MYLOG %s for diagnostics\n", filename);
+		return;
+	}
+
+	printf("--- MYLOG diagnostics (keywords: %s) ---\n", keywords);
+	while (fgets(line, sizeof(line), fp))
+	{
+		if (strstr(line, keywords))
+			printf("%s", line);
+	}
+	printf("--- end MYLOG diagnostics ---\n");
+	fclose(fp);
+}
+
+/*
+ * Print the path of any psqlodbcw.so library mapped into this process.
+ * Useful to verify that unixODBC actually loaded the DRIVER we requested.
+ */
+static void
+dump_loaded_driver_path(void)
+{
+	FILE *fp = fopen("/proc/self/maps", "r");
+	char line[1024];
+	int found = 0;
+
+	if (!fp)
+		return;
+
+	printf("--- loaded psqlodbcw.so paths ---\n");
+	while (fgets(line, sizeof(line), fp))
+	{
+		if (strstr(line, "psqlodbcw.so"))
+		{
+			printf("%s", line);
+			found = 1;
+		}
+	}
+	if (!found)
+		printf("(none)\n");
+	printf("--- end loaded paths ---\n");
+	fclose(fp);
 }
 
 static void
 test_result_set_cap(void)
 {
 	SQLRETURN rc;
+	SQLHDBC hdbc = SQL_NULL_HDBC;
 	HSTMT hstmt = SQL_NULL_HSTMT;
 	SQLCHAR errstate[6];
 	SQLINTEGER nativeerr;
 	SQLCHAR errmsg[256];
 	SQLSMALLINT errlen;
+	char connstr[1024];
 	int cap_hit = 0;
 
-	rc = SQLAllocStmt(conn, &hstmt);
+	/*
+	 * Use a separate connection with declare/fetch disabled so the driver
+	 * materializes the whole result set in memory. With a cursor, rows are
+	 * fetched in small batches and the 5M-row allocation cap is never hit.
+	 * Enable Debug=1 so the MYLOG output can be inspected on failure.
+	 */
+	rc = SQLAllocHandle(SQL_HANDLE_DBC, env, &hdbc);
+	if (!SQL_SUCCEEDED(rc))
+	{
+		print_diag("FAIL: SQLAllocHandle(DBC) failed", SQL_HANDLE_ENV, env);
+		exit(1);
+	}
+
+	build_connect_string(connstr, sizeof(connstr),
+						 "UseDeclareFetch=0;Debug=1");
+	{
+		char masked[1024];
+		char *p;
+
+		strncpy(masked, connstr, sizeof(masked) - 1);
+		masked[sizeof(masked) - 1] = '\0';
+		if ((p = strstr(masked, "PWD=")) != NULL)
+		{
+			char *end = strchr(p + 4, ';');
+			memset(p + 4, 'x', end ? (size_t)(end - (p + 4)) : strlen(p + 4));
+		}
+		printf("cap test connection string: %s\n", masked);
+	}
+	rc = SQLDriverConnect(hdbc, NULL, (SQLCHAR *) connstr, SQL_NTS,
+						  NULL, 0, NULL, SQL_DRIVER_COMPLETE);
+	if (!SQL_SUCCEEDED(rc))
+	{
+		print_diag("FAIL: SQLDriverConnect(UseDeclareFetch=0) failed",
+				   SQL_HANDLE_DBC, hdbc);
+		exit(1);
+	}
+
+	dump_loaded_driver_path();
+
+	rc = SQLAllocStmt(hdbc, &hstmt);
 	CHECK_STMT_RESULT(rc, "SQLAllocStmt failed", hstmt);
 
 	/*
@@ -181,12 +353,48 @@ test_result_set_cap(void)
 
 	if (!cap_hit)
 	{
-		fprintf(stderr, "FAIL: expected 'maximum allowed rows' error for 5,000,001-row result set\n");
+		SQLRETURN	rc2;
+		SQLLEN		fetched = 0;
+
+		fprintf(stderr,
+				"FAIL: expected 'maximum allowed rows' error for 5,000,001-row result set\n");
+		fprintf(stderr, "      SQLExecDirect returned %d\n", (int) rc);
+		if (SQLGetDiagRec(SQL_HANDLE_STMT, hstmt, 1,
+						  errstate, &nativeerr,
+						  errmsg, sizeof(errmsg), &errlen) != SQL_ERROR)
+		{
+			fprintf(stderr, "      diag: [%s] %s\n", errstate, errmsg);
+		}
+
+		/*
+		 * Diagnostic: if the driver used a DECLARE/FETCH cursor, only
+		 * Fetch=100 rows will be materialized and the cap is never hit.
+		 * If it materialized the full result set, we will see far more.
+		 */
+		while ((rc2 = SQLFetch(hstmt)) == SQL_SUCCESS ||
+			   rc2 == SQL_SUCCESS_WITH_INFO)
+		{
+			fetched++;
+			if (fetched >= 200)
+				break;
+		}
+		fprintf(stderr, "      fetched %ld rows (%s)%s\n",
+				(long) fetched,
+				rc2 == SQL_NO_DATA ? "SQL_NO_DATA" : "stopped at 200",
+				rc2 == SQL_ERROR ? " [SQL_ERROR]" : "");
+
+		dump_mylog_lines("REALLOC");
+		SQLFreeStmt(hstmt, SQL_DROP);
+		SQLDisconnect(hdbc);
+		SQLFreeConnect(hdbc);
 		exit(1);
 	}
-	printf("OK: result set cap prevented unbounded allocation\n");
 
 	SQLFreeStmt(hstmt, SQL_DROP);
+	SQLDisconnect(hdbc);
+	SQLFreeConnect(hdbc);
+
+	printf("OK: result set cap prevented unbounded allocation\n");
 }
 
 static void
@@ -198,6 +406,7 @@ test_long_sslcert_path(void)
 	SQLSMALLINT strl;
 	char dsn[4096];
 	char longpath[1100];
+	char extra[4096];
 	int i;
 
 	/* Build a 1000-character dummy path that does not exist. */
@@ -207,9 +416,10 @@ test_long_sslcert_path(void)
 		longpath[i] = 'a' + (i % 26);
 	longpath[1000] = '\0';
 
-	snprintf(dsn, sizeof(dsn),
-			 "DSN=gaussdb;UID=odbc;PWD=Gauss@123;sslmode=verify-ca;sslcert=%s;sslkey=%s;sslrootcert=%s",
+	snprintf(extra, sizeof(extra),
+			 "sslmode=verify-ca;sslcert=%s;sslkey=%s;sslrootcert=%s",
 			 longpath, longpath, longpath);
+	build_connect_string(dsn, sizeof(dsn), extra);
 
 	rc = SQLAllocHandle(SQL_HANDLE_DBC, env, &hdbc);
 	if (!SQL_SUCCEEDED(rc))
@@ -242,6 +452,7 @@ test_default_ssl_prefer(void)
 	SQLHDBC hdbc = SQL_NULL_HDBC;
 	SQLCHAR str[1024];
 	SQLSMALLINT strl;
+	char dsn[1024];
 
 	/* Do not specify sslmode; the default should now be 'prefer'. */
 	rc = SQLAllocHandle(SQL_HANDLE_DBC, env, &hdbc);
@@ -251,10 +462,9 @@ test_default_ssl_prefer(void)
 		exit(1);
 	}
 
-	rc = SQLDriverConnect(hdbc, NULL,
-						  (SQLCHAR *) "DSN=gaussdb;UID=odbc;PWD=Gauss@123",
-						  SQL_NTS, str, sizeof(str), &strl,
-						  SQL_DRIVER_COMPLETE);
+	build_connect_string(dsn, sizeof(dsn), NULL);
+	rc = SQLDriverConnect(hdbc, NULL, (SQLCHAR *) dsn, SQL_NTS,
+						  str, sizeof(str), &strl, SQL_DRIVER_COMPLETE);
 	if (!SQL_SUCCEEDED(rc))
 	{
 		print_diag("FAIL: default SSL mode 'prefer' should allow connection",
@@ -295,16 +505,22 @@ check_log_redaction(const char *password,
 	if (!username)
 		username = "unknown";
 
-	/* Default MYLOG path on Linux: /tmp/mylog_<exe>_<user>_<pid>.log */
+	/*
+	 * Default MYLOG path on Linux: /tmp/mylog_<exe>_<user><pid>.log
+	 * (the driver does not insert an underscore before the pid).
+	 */
 	snprintf(filename, sizeof(filename),
-			 "/tmp/mylog_security-fix-test_%s_%u.log", username, (unsigned) pid);
+			 "/tmp/mylog_security-fix-test_%s%u.log", username, (unsigned) pid);
 
 	fp = fopen(filename, "r");
 	if (!fp)
 	{
-		printf("WARN: could not open MYLOG file %s (is Debug=1 set in odbcinst.ini?)\n",
-			   filename);
-		return 0;
+		fprintf(stderr,
+				"FAIL: could not open MYLOG file %s. "
+				"Enable Debug=1 in the driver section of odbcinst.ini "
+				"(see README-security-fix-test.md).\n",
+				filename);
+		return 1;
 	}
 
 	while (fgets(line, sizeof(line), fp))
@@ -356,6 +572,7 @@ test_log_password_redaction(void)
 	const char *sslkey = "/secret/odbc-key.pem";
 	const char *sslrootcert = "/secret/odbc-root.crt";
 	char dsn[4096];
+	char extra[4096];
 
 	rc = SQLAllocHandle(SQL_HANDLE_DBC, env, &hdbc);
 	if (!SQL_SUCCEEDED(rc))
@@ -367,12 +584,14 @@ test_log_password_redaction(void)
 	/*
 	 * Use multiple hosts/ports so the driver takes the URL-logging path in
 	 * connection.c. The URL contains password and SSL file paths; all of them
-	 * must be masked in MYLOG even if the connection itself fails.
+	 * must be masked in MYLOG even if the connection itself fails. Enable
+	 * Debug=1 so the MYLOG file is produced for this process.
 	 */
-	snprintf(dsn, sizeof(dsn),
-			 "DSN=gaussdb;UID=odbc;PWD=%s;SERVER=127.0.0.1,127.0.0.1;PORT=5432,5432;"
+	snprintf(extra, sizeof(extra),
+			 "SERVER=127.0.0.1,127.0.0.1;PORT=5432,5432;Debug=1;"
 			 "sslmode=verify-ca;sslcert=%s;sslkey=%s;sslrootcert=%s",
-			 password, sslcert, sslkey, sslrootcert);
+			 sslcert, sslkey, sslrootcert);
+	build_connect_string(dsn, sizeof(dsn), extra);
 
 	rc = SQLDriverConnect(hdbc, NULL, (SQLCHAR *) dsn, SQL_NTS,
 						  str, sizeof(str), &strl, SQL_DRIVER_COMPLETE);
@@ -417,8 +636,45 @@ test_large_result_set(void)
 	}
 	printf("OK: fetched 100000 rows without crash or runaway allocation\n");
 
-	SQLFreeStmt(hstmt, SQL_DROP);
+	rc = SQLFreeStmt(hstmt, SQL_DROP);
+	CHECK_STMT_RESULT(rc, "SQLFreeStmt failed", hstmt);
 }
+
+#ifdef WIN32
+static void
+test_sqlconnectw_invalid_length(void)
+{
+	SQLRETURN rc;
+	SQLHDBC hdbc = SQL_NULL_HDBC;
+	SQLWCHAR dsn[] = L"gaussdb";
+	SQLWCHAR user[] = L"odbc";
+	SQLWCHAR pwd[] = L"Gauss@123";
+
+	rc = SQLAllocHandle(SQL_HANDLE_DBC, env, &hdbc);
+	if (!SQL_SUCCEEDED(rc))
+	{
+		print_diag("FAIL: SQLAllocHandle(DBC) failed", SQL_HANDLE_ENV, env);
+		exit(1);
+	}
+
+	/*
+	 * SQLConnectW with an invalid negative length (not SQL_NTS) must fail.
+	 * Without the fix, win_unicode.c would call ucs2strlen on the wide
+	 * string and read out of bounds.
+	 */
+	rc = SQLConnectW(hdbc, dsn, -2, user, SQL_NTS, pwd, SQL_NTS);
+	if (rc != SQL_ERROR)
+	{
+		fprintf(stderr,
+				"FAIL: SQLConnectW with invalid negative length should return SQL_ERROR, got %d\n",
+				rc);
+		exit(1);
+	}
+	printf("OK: SQLConnectW with invalid negative length returned SQL_ERROR\n");
+
+	SQLFreeConnect(hdbc);
+}
+#endif
 
 int main(int argc, char **argv)
 {
@@ -433,12 +689,18 @@ int main(int argc, char **argv)
 	test_large_result_set();
 	test_result_set_cap();
 
-	test_disconnect();
+	test_disconnect_keep_env();
 
 	/* The following tests allocate their own connections. */
 	test_long_sslcert_path();
 	test_default_ssl_prefer();
 	test_log_password_redaction();
+
+#ifdef WIN32
+	test_sqlconnectw_invalid_length();
+#endif
+
+	test_free_env();
 
 	printf("=== security-fix-test passed ===\n");
 	return 0;
