@@ -3093,9 +3093,12 @@ MYLOG(DETAIL_LOG_LEVEL, "type=%d concur=%d\n", stmt->options.cursor_type, stmt->
 			if (SQL_CURSOR_FORWARD_ONLY != stmt->options.cursor_type)
 				opt_scroll = " scroll";
 		}
+		fprintf(stderr, "DEBUG convert: use_declarefetch=%d fetchcursor=%d\n",
+			ci->drivers.use_declarefetch, SC_is_fetchcursor(stmt));
 		if (SC_is_fetchcursor(stmt))
 		{
-			snprintfcat(new_statement, qb->str_alsize, 
+			fprintf(stderr, "DEBUG convert: USING CURSOR: %s\n", new_statement);
+			snprintfcat(new_statement, qb->str_alsize,
 				"declare \"%s\"%s cursor%s for ",
 				SC_cursor_name(stmt), opt_scroll, opt_hold);
 			qb->npos = strlen(new_statement);
