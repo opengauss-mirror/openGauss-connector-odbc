@@ -1,1 +1,10 @@
 odbc-brainafk/
+x64_Unicode_Release/
+winbuild/x64_Unicode_Release/
+.codegraph/
+/odbc_output/
+/output/
+/build/
+/libpq/
+windows/test/*.exe
+
