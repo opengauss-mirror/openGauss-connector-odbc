@@ -10,7 +10,7 @@ CMAKE_DIR=/c/env/cmake-3.26
 OPENSSL_DIR=/c/windows_odbc/win32/open_source/output/openssl-win32
 OUTPUT_DIR=$LIB_ODBC_DIR/odbc_output
 
-export PATH=$MINGW_DIR/bin:$CMAKE_DIR/bin:/c/install/NSIS:/c/install/7-Zip:$PATH
+export PATH=/c/buildtools/msys64/usr/bin:$MINGW_DIR/bin:$CMAKE_DIR/bin:/c/install/NSIS:/c/install/7-Zip:$PATH
 
 # Build libsecurec.lib
 cd "$WD"
@@ -46,9 +46,9 @@ cp -r "$LIB_GAUSSDB_DIR/src/include/ssl" "$LIB_GAUSSDB_DIR/libpq-win32/include/"
 rm -rf build
 mkdir build
 cd build
-cmake -DMINGW_DIR="$MINGW_DIR" -DOPENSSL_DIR="$OPENSSL_DIR" -D"CMAKE_MAKE_PROGRAM:PATH=$MINGW_DIR/bin/make.exe" -G "MinGW Makefiles" ..
-sed -i 's|LIB_CRYPTO-NOTFOUND|C:/windows_odbc/win32/open_source/output/openssl-win32/libcrypto-3.dll|g' CMakeCache.txt
-sed -i 's|LIB_SSL-NOTFOUND|C:/windows_odbc/win32/open_source/output/openssl-win32/libssl-3.dll|g' CMakeCache.txt
+cmake -DMINGW_DIR="$MINGW_DIR" -DOPENSSL_DIR="$OPENSSL_DIR" -DCMAKE_FIND_LIBRARY_SUFFIXES=".a;.dll.a;.lib" -D"CMAKE_MAKE_PROGRAM:PATH=$MINGW_DIR/bin/make.exe" -G "MinGW Makefiles" .. || true
+sed -i "s|LIB_CRYPTO-NOTFOUND|${OPENSSL_DIR}/lib/libcrypto.a|g" CMakeCache.txt
+sed -i "s|LIB_SSL-NOTFOUND|${OPENSSL_DIR}/lib/libssl.a|g" CMakeCache.txt
 make
 
 # Build psqlodbc35w.lib
@@ -60,9 +60,9 @@ cp -r "$LIB_GAUSSDB_DIR/libpq-win32/output/libpq.lib" ./libpq/lib
 rm -rf build
 mkdir build
 cd build
-cmake -DMINGW_DIR="$MINGW_DIR" -DOPENSSL_DIR="$OPENSSL_DIR" -D"CMAKE_MAKE_PROGRAM:PATH=$MINGW_DIR/bin/make.exe" -G "MinGW Makefiles" ..
-sed -i 's|LIB_CRYPTO-NOTFOUND|C:/windows_odbc/win32/open_source/output/openssl-win32/libcrypto-3.dll|g' CMakeCache.txt
-sed -i 's|LIB_SSL-NOTFOUND|C:/windows_odbc/win32/open_source/output/openssl-win32/libssl-3.dll|g' CMakeCache.txt
+cmake -DMINGW_DIR="$MINGW_DIR" -DOPENSSL_DIR="$OPENSSL_DIR" -DCMAKE_FIND_LIBRARY_SUFFIXES=".a;.dll.a;.lib" -D"CMAKE_MAKE_PROGRAM:PATH=$MINGW_DIR/bin/make.exe" -G "MinGW Makefiles" ..
+sed -i "s|LIB_CRYPTO-NOTFOUND|${OPENSSL_DIR}/lib/libcrypto.a|g" CMakeCache.txt
+sed -i "s|LIB_SSL-NOTFOUND|${OPENSSL_DIR}/lib/libssl.a|g" CMakeCache.txt
 make
 
 # Build psqlodbc.exe
