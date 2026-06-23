@@ -103,6 +103,7 @@ TARGET_LINK_LIBRARIES(DLL_PSQLODBC
 		      -lwinmm
 		      -lsecurity
 		      -lgdi32
-		      ${LIB_CRYPTO} 
+		      ${LIB_CRYPTO}
 		      ${LIB_SSL}
-		      ${LIB_SECUREC})
+		      ${LIB_SECUREC}
+		      -lstdc++)

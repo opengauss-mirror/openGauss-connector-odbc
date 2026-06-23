@@ -3,16 +3,16 @@ REM Copyright Huawei Technologies Co., Ltd. 2010-2018. All rights reserved.
 setlocal
 
 set WD=%__CD__%
-set LIB_SECURITY_DIR=D:\windows_odbc\win32\open_source\Huawei_Secure_C_V100R001C01SPC010B002
-set LIB_GAUSSDB_DIR=D:\windows_odbc\win32\open_source\openGauss-server
-set LIB_ODBC_DIR=D:\windows_odbc\win32\open_source\openGauss-connector-odbc
+set LIB_SECURITY_DIR=C:\windows_odbc\win32\open_source\Huawei_Secure_C_V100R001C01SPC010B002
+set LIB_GAUSSDB_DIR=C:\windows_odbc\win32\open_source\openGauss-server
+set LIB_ODBC_DIR=C:\Users\luodongxu\work\openGauss-connector-odbc
 
-set MINGW_DIR=D:\buildtools\mingw-8.1.0\msys64\mingw32
-set CMAKE_DIR=D:\env\cmake-3.26
+set MINGW_DIR=C:\buildtools\msys64\mingw32
+set CMAKE_DIR=C:\env\cmake-3.26
 REM openss compiled direction
-set OPENSSL_DIR=D:\windows_odbc\win32\open_source\output\openssl-win32
+set OPENSSL_DIR=C:\windows_odbc\win32\open_source\output\openssl-win32
 
-set p7zip=D:\install\7-Zip
+set p7zip=C:\install\7-Zip
 set OUTPUT_DIR=%LIB_ODBC_DIR%/odbc_output
 
 if not exist %OPENSSL_DIR%/libcrypto-1_1.dll (
@@ -42,8 +42,8 @@ rm -rf build
 mkdir build
 cd build
 cmake -DMINGW_DIR="%MINGW_DIR%" -DOPENSSL_DIR="%OPENSSL_DIR%" -D"CMAKE_MAKE_PROGRAM:PATH=%MINGW_DIR%/bin/make.exe" -G "MinGW Makefiles" ..
-sed -i 's/LIB_CRYPTO-NOTFOUND/D:\/windows_odbc\/win32\/open_source\/output\/openssl-win32\/libcrypto-1_1.dll/g' CMakeCache.txt
-sed -i 's/LIB_SSL-NOTFOUND/D:\/windows_odbc\/win32\/open_source\/output\/openssl-win32\/libssl-1_1.dll/g' CMakeCache.txt
+sed -i 's/LIB_CRYPTO-NOTFOUND/C:\/windows_odbc\/win32\/open_source\/output\/openssl-win32\/libcrypto-3.dll/g' CMakeCache.txt
+sed -i 's/LIB_SSL-NOTFOUND/C:\/windows_odbc\/win32\/open_source\/output\/openssl-win32\/libssl-3.dll/g' CMakeCache.txt
 make
 
 cd %WD%
@@ -57,8 +57,8 @@ rm -rf build
 mkdir build
 cd build
 cmake -DMINGW_DIR="%MINGW_DIR%" -DOPENSSL_DIR="%OPENSSL_DIR%" -D"CMAKE_MAKE_PROGRAM:PATH=%MINGW_DIR%/bin/make.exe" -G "MinGW Makefiles" ..
-sed -i 's/LIB_CRYPTO-NOTFOUND/D:\/windows_odbc\/win32\/open_source\/output\/openssl-win32\/libcrypto-1_1.dll/g' CMakeCache.txt
-sed -i 's/LIB_SSL-NOTFOUND/D:\/windows_odbc\/win32\/open_source\/output\/openssl-win32\/libssl-1_1.dll/g' CMakeCache.txt
+sed -i 's/LIB_CRYPTO-NOTFOUND/C:\/windows_odbc\/win32\/open_source\/output\/openssl-win32\/libcrypto-3.dll/g' CMakeCache.txt
+sed -i 's/LIB_SSL-NOTFOUND/C:\/windows_odbc\/win32\/open_source\/output\/openssl-win32\/libssl-3.dll/g' CMakeCache.txt
 make
 
 cd %WD%
@@ -67,8 +67,8 @@ cd psqlodbc-installer
 rm -rf win32_dll
 mkdir win32_dll
 cp %LIB_ODBC_DIR%/output/psqlodbc35w.dll ./win32_dll
-cp "%OPENSSL_DIR%"/libssl-1_1.dll ./win32_dll
-cp "%OPENSSL_DIR%"/libcrypto-1_1.dll ./win32_dll
+cp "%OPENSSL_DIR%"/libssl-3.dll ./win32_dll
+cp "%OPENSSL_DIR%"/libcrypto-3.dll ./win32_dll
 makensis odbc-installer.nsi
 
 cd %WD%

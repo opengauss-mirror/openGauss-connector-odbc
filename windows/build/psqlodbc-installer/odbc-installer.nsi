@@ -48,8 +48,8 @@ Section "ODBC Driver (required)"
   SetOutPath $INSTDIR
   
   ; Put file there
-  File "win32_dll\libcrypto-1_1.dll"
-  File "win32_dll\libssl-1_1.dll"
+  File "win32_dll\libcrypto-3.dll"
+  File "win32_dll\libssl-3.dll"
   File "win32_dll\psqlodbc35w.dll"
   
   SetRegView 32
@@ -122,8 +122,8 @@ Section "Uninstall"
   DeleteRegKey HKLM "SOFTWARE\ODBC\ODBCINST.INI\PostgreSQL Unicode" 
 
   ; Remove files and uninstaller
-  Delete $INSTDIR\libcrypto-1_1.dll
-  Delete $INSTDIR\libssl-1_1.dll
+  Delete $INSTDIR\libcrypto-3.dll
+  Delete $INSTDIR\libssl-3.dll
   Delete $INSTDIR\psqlodbc35w.dll
   Delete "$INSTDIR\uninstall.exe"
 
