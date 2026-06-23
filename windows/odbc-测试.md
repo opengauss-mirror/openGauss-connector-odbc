@@ -7,7 +7,7 @@
 | 软件名字   | 地址                                                         |
 | ---------- | ------------------------------------------------------------ |
 | odbct32w   | https://download.microsoft.com/download/9/a/1/9a1256c9-d301-4fdc-93b9-370c5b2f9827/mdac28sdk.msi |
-| odbc安装包 | https://opengauss.obs.cn-south-1.myhuaweicloud.com/tools/odbc/openGauss-5.0.0-ODBC-windows.tar.gz |
+| odbc安装包 | https://gitcode.com/opengauss/openGauss-connector-odbc/releases （或本地编译生成的 `odbc_output/openGauss-5.0.0-ODBC-windows.tar.gz`） |
 
 
 

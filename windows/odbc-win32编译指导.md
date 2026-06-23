@@ -52,10 +52,10 @@ odbc编译windows32需要的代码有，openssl，安全函数，openGauss-conne
 
 | 代码名称                 | 代码仓库                                                     |
 | ------------------------ | ------------------------------------------------------------ |
-| openssl                  | https://gitee.com/opengauss/openGauss-third_party/blob/master/dependency/openssl/openssl-OpenSSL_1_1_1n.tar.gz |
-| 安全函数                 | https://gitee.com/opengauss/openGauss-third_party/raw/master/platform/Huawei_Secure_C/Huawei_Secure_C_V100R001C01SPC010B002.zip |
-| openGauss-connector-odbc | https://gitee.com/opengauss/openGauss-connector-odbc.git     |
-| openGauss-server         | https://gitee.com/opengauss/openGauss-server.git             |
+| openssl                  | https://gitcode.com/opengauss/openGauss-third_party/blob/master/dependency/openssl/openssl-3.0.9.tar.gz |
+| 安全函数                 | https://gitcode.com/opengauss/openGauss-third_party/raw/master/platform/Huawei_Secure_C/Huawei_Secure_C_V100R001C01SPC010B002.zip |
+| openGauss-connector-odbc | https://gitcode.com/opengauss/openGauss-connector-odbc.git     |
+| openGauss-server         | https://gitcode.com/opengauss/openGauss-server.git             |
 
 
 
@@ -73,16 +73,16 @@ odbc.bat脚本的最开始，是一些环境变量和代码的路径，需要根
 
 ```shell
 set WD=%__CD__%
-set LIB_SECURITY_DIR=D:\windows_odbc\win32\open_source\Huawei_Secure_C_V100R001C01SPC010B002
-set LIB_GAUSSDB_DIR=D:\windows_odbc\win32\open_source\openGauss-server
-set LIB_ODBC_DIR=D:\windows_odbc\win32\open_source\openGauss-connector-odbc
+set LIB_SECURITY_DIR=C:\windows_odbc\win32\open_source\Huawei_Secure_C_V100R001C01SPC010B002
+set LIB_GAUSSDB_DIR=C:\windows_odbc\win32\open_source\openGauss-server
+set LIB_ODBC_DIR=C:\windows_odbc\win32\open_source\openGauss-connector-odbc
 
-set MINGW_DIR=D:\buildtools\mingw-8.1.0\msys64\mingw32
-set CMAKE_DIR=D:\env\cmake-3.26
+set MINGW_DIR=C:\buildtools\mingw-8.1.0\msys64\mingw32
+set CMAKE_DIR=C:\env\cmake-3.26
 REM openss compiled direction
-set OPENSSL_DIR=D:\windows_odbc\win32\open_source\output\openssl-win32
+set OPENSSL_DIR=C:\windows_odbc\win32\open_source\output\openssl-win32
 
-set p7zip=D:\install\7-Zip
+set p7zip=C:\install\7-Zip
 set OUTPUT_DIR=%LIB_ODBC_DIR%/odbc_output
 ```
 
@@ -93,7 +93,7 @@ set OUTPUT_DIR=%LIB_ODBC_DIR%/odbc_output
 在odbc.bat脚本中调用openssl.bat编译openssl
 
 ```shell
-if not exist %OPENSSL_DIR%/libcrypto-1_1.dll (
+if not exist %OPENSSL_DIR%/libcrypto-3.dll (
     cd %WD%
     REM Build openssl
     call openssl.bat
@@ -109,9 +109,9 @@ cd %OPENSSL_DIR%
 REM openssl config
 %MSYS_SHELL% -defterm -mingw32 -no-start -full-path -here -c './Configure ^
 --prefix=$PWD/openssl-win32 ^
-shared mingw no-tests; make -j20; make install -j20; ^
-cp $PWD/openssl-win32/bin/libssl-1_1.dll $PWD/openssl-win32; ^
-cp $PWD/openssl-win32/bin/libcrypto-1_1.dll $PWD/openssl-win32; ^
+shared mingw no-tests; make -j20; make install_sw -j20; ^
+cp $PWD/openssl-win32/bin/libssl-3.dll $PWD/openssl-win32; ^
+cp $PWD/openssl-win32/bin/libcrypto-3.dll $PWD/openssl-win32; ^
 rm -rf $PWD/../../output; ^
 mkdir -p $PWD/../../output; mv $PWD/openssl-win32 $PWD/../../output/.' ^
 ```
@@ -203,7 +203,7 @@ bool is_file_delete(int err)
 
 ![image-20230322161142228](odbc-win32%E7%BC%96%E8%AF%91%E6%8C%87%E5%AF%BC.assets/image-20230322161142228.png)
 
-解决方法：手动修改D:\windows_odbc\win32\open_source\openGauss-server\libpq-win32\build目录下的CMakeCache.txt文件
+解决方法：手动修改C:\windows_odbc\win32\open_source\openGauss-server\libpq-win32\build目录下的CMakeCache.txt文件
 
 ![image-20230322161255741](odbc-win32%E7%BC%96%E8%AF%91%E6%8C%87%E5%AF%BC.assets/image-20230322161255741.png)
 
@@ -263,8 +263,8 @@ cd psqlodbc-installer
 rm -rf win32_dll
 mkdir win32_dll
 cp %LIB_ODBC_DIR%/output/psqlodbc35w.dll ./win32_dll
-cp "%OPENSSL_DIR%"/libssl-1_1.dll ./win32_dll
-cp "%OPENSSL_DIR%"/libcrypto-1_1.dll ./win32_dll
+cp "%OPENSSL_DIR%"/libssl-3.dll ./win32_dll
+cp "%OPENSSL_DIR%"/libcrypto-3.dll ./win32_dll
 makensis odbc-installer.nsi
 ```
 
