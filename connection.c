@@ -108,6 +108,25 @@ CnEntry pgxc_entry;
 static int LIBPQ_connect(ConnectionClass *self);
 int split_host_or_port_with_limit(const char *str, char *result_array[MAX_PARTS], int* total_length);
 char* generate_conninfo_URL_by_ConnInfo(ConnInfo* ci, int* host_number, int* port_number);
+
+static BOOL
+cn_entry_contains(const CnEntry *entry, const char *host, const char *port)
+{
+    int i;
+
+    if (entry == NULL || host == NULL || port == NULL) {
+        return FALSE;
+    }
+
+    for (i = 0; i < entry->ip_count && i < MAX_CN; i++) {
+        if (stricmp(entry->ip_list[i], host) == 0 &&
+            strcmp(entry->port_list[i], port) == 0) {
+            return TRUE;
+        }
+    }
+    return FALSE;
+}
+
 #ifdef WIN32
 DWORD WINAPI read_pgxc_node(LPVOID arg)
 #else
@@ -137,9 +156,10 @@ static void *read_pgxc_node(void *arg)
 		SQLHSTMT hStmt = SQL_NULL_HSTMT;
 		SQLRETURN rc = SQL_SUCCESS;
 		SQLINTEGER RETCODE = 0;
-		char node_port[SMALL_REGISTRY_LEN];
-		char node_host[lenNameType];
-		SQLLEN lenPort=0, lenHost=0;
+        char node_port[SMALL_REGISTRY_LEN];
+        char node_host[lenNameType + 1];
+        SQLLEN lenPort = 0;
+        SQLLEN lenHost = 0;
 		RETCODE = SQLAllocHandle(SQL_HANDLE_ENV, SQL_NULL_HANDLE, &hEnv);
 		if (RETCODE != SQL_SUCCESS) {
 			continue;
@@ -164,6 +184,7 @@ static void *read_pgxc_node(void *arg)
 		}
 		RETCODE = SQLAllocHandle(SQL_HANDLE_STMT, hDbc, &hStmt);
 		if (RETCODE != SQL_SUCCESS) {
+			SQLDisconnect(hDbc);
 			SQLFreeHandle(SQL_HANDLE_DBC, hDbc);
 			SQLFreeHandle(SQL_HANDLE_ENV, hEnv);
 			continue;
@@ -185,16 +206,26 @@ static void *read_pgxc_node(void *arg)
 			SQLFreeHandle(SQL_HANDLE_ENV, hEnv);
 			continue;
 		}
-		int count = 0;
-		char IP_list_temp[MAX_CN][MEDIUM_REGISTRY_LEN];
-		char port_list_temp[MAX_CN][SMALL_REGISTRY_LEN];
-		char port_temp[SMALL_REGISTRY_LEN];
-		while ((rc = SQLFetch(hStmt)) == SQL_SUCCESS) {
-			refresh_flag = 1;
-			STRCPY_FIXED(IP_list_temp[count], node_host);
-			STRCPY_FIXED(port_list_temp[count++], node_port);
-			pgxc_entry.ip_count = count;
-		}
+        int count = 0;
+        int overflow = 0;
+        char IP_list_temp[MAX_CN][MEDIUM_REGISTRY_LEN];
+        char port_list_temp[MAX_CN][SMALL_REGISTRY_LEN];
+        while ((rc = SQLFetch(hStmt)) == SQL_SUCCESS) {
+            if (!cn_entry_contains(&orig_entry, node_host, node_port)) {
+                MYLOG(0, "Ignore unconfigured CN returned by pgxc_node: host=%s, port=%s\n", node_host, node_port);
+                continue;
+            }
+            if (count >= MAX_CN) {
+                overflow = 1;
+                rc = SQL_ERROR;
+                MYLOG(0, "pgxc_node returned more than %d configured CN rows, skip refresh.\n", MAX_CN);
+                break;
+            }
+            refresh_flag = 1;
+            STRCPY_FIXED(IP_list_temp[count], node_host);
+            STRCPY_FIXED(port_list_temp[count], node_port);
+            count++;
+        }
 		refresh_count++;
 
 		if (refresh_count > 10 && rc == SQL_ERROR) {
@@ -202,61 +233,67 @@ static void *read_pgxc_node(void *arg)
 			MYLOG(0, "Refresh failed for ten times, change signal and unlock other threads.\n");
 		}
 
-		int i;
-		if (count != 0 && pthread_rwlock_wrlock(&pgxc_entry.ip_list_lock) == 0) {
-			for (i = 0; i < pgxc_entry.ip_count; i++) {
-				STRCPY_FIXED(pgxc_entry.ip_list[i], IP_list_temp[i]);
-				STRCPY_FIXED(pgxc_entry.port_list[i], port_list_temp[i]);
-				MYLOG(0, "ip = %s, port = %s\n", pgxc_entry.ip_list[i], pgxc_entry.port_list[i]);
-			}
-			MYLOG(0, "CN list has been refreshed.\n");
-			if (pthread_rwlock_unlock(&pgxc_entry.ip_list_lock) != 0) {
-				SQLFreeHandle(SQL_HANDLE_STMT, hStmt);
-				SQLDisconnect(hDbc);
-				SQLFreeHandle(SQL_HANDLE_DBC, hDbc);
-				SQLFreeHandle(SQL_HANDLE_ENV, hEnv);
-				MYLOG(0, "Unlock failed. Exit process.\n");
-				exit(1);
-			}
-		}
-		SQLDisconnect(hDbc);
-		sleep(time);
-	}
+        int i;
+        if (!overflow && count != 0 && pthread_rwlock_wrlock(&pgxc_entry.ip_list_lock) == 0) {
+            pgxc_entry.ip_count = count;
+            pgxc_entry.port_count = count;
+            for (i = 0; i < count; i++) {
+                STRCPY_FIXED(pgxc_entry.ip_list[i], IP_list_temp[i]);
+                STRCPY_FIXED(pgxc_entry.port_list[i], port_list_temp[i]);
+                MYLOG(0, "ip = %s, port = %s\n", pgxc_entry.ip_list[i], pgxc_entry.port_list[i]);
+            }
+            MYLOG(0, "CN list has been refreshed.\n");
+            if (pthread_rwlock_unlock(&pgxc_entry.ip_list_lock) != 0) {
+                SQLFreeHandle(SQL_HANDLE_STMT, hStmt);
+                SQLDisconnect(hDbc);
+                SQLFreeHandle(SQL_HANDLE_DBC, hDbc);
+                SQLFreeHandle(SQL_HANDLE_ENV, hEnv);
+                MYLOG(0, "Unlock failed. Exit process.\n");
+                exit(1);
+            }
+        }
+        SQLFreeHandle(SQL_HANDLE_STMT, hStmt);
+        SQLDisconnect(hDbc);
+        SQLFreeHandle(SQL_HANDLE_DBC, hDbc);
+        SQLFreeHandle(SQL_HANDLE_ENV, hEnv);
+        sleep(time);
+    }
 }
 
 static BOOL check_IP_connection(ConnectionClass *conn, CnEntry *entry)
 {
-	int i;
-	int pqret;
-	BOOL ret = FALSE;
-	ConnInfo *ci = &conn->connInfo;
+    int i;
+    int pqret;
+    BOOL ret = FALSE;
+    ConnInfo *ci;
 
-	if (conn == NULL) {
-		return FALSE;
-	}
-	MYLOG(0, "Start checking the connection for each pair of IP and PORT.\n");
-	if (entry == &pgxc_entry) {
-		pthread_rwlock_rdlock(&entry->ip_list_lock);
-	}
-	for (i = 0; i < entry->ip_count; i++) {
-		STRCPY_FIXED(ci->server, entry->ip_list[i]);
-		STRCPY_FIXED(ci->port, entry->port_list[i]);
-		if ((pqret = LIBPQ_connect(conn)) <= 0) {
-			/* connection failed, kick out the wrong IP from IP_list and write the wrong IP into log */
-			MYLOG(0, "Cannot establish connection via IP: %s\n", entry->ip_list[i]);
-			entry->ip_status[i] = WRONG;
-		} else {
-			/* connection successful, current IP remains in IP_list but disconnect */
-			entry->ip_status[i] = CORRECT;
-			PQfinish(conn->pqconn);
-			ret = TRUE;
-		}
-	}
-	MYLOG(0, "Check finished.\n");
-	if (entry == &pgxc_entry) {
-		pthread_rwlock_unlock(&entry->ip_list_lock);
-	}
-	return ret;
+    if (conn == NULL || entry == NULL) {
+        return FALSE;
+    }
+    ci = &conn->connInfo;
+    MYLOG(0, "Start checking the connection for each pair of IP and PORT.\n");
+    if (pthread_rwlock_wrlock(&entry->ip_list_lock) != 0) {
+        return FALSE;
+    }
+    for (i = 0; i < entry->ip_count; i++) {
+        STRCPY_FIXED(ci->server, entry->ip_list[i]);
+        STRCPY_FIXED(ci->port, entry->port_list[i]);
+        if ((pqret = LIBPQ_connect(conn)) <= 0) {
+            /* connection failed, kick out the wrong IP from IP_list and write the wrong IP into log */
+            MYLOG(0, "Cannot establish connection via IP: %s\n", entry->ip_list[i]);
+            entry->ip_status[i] = WRONG;
+        } else {
+            /* connection successful, current IP remains in IP_list but disconnect */
+            entry->ip_status[i] = CORRECT;
+            PQfinish(conn->pqconn);
+            ret = TRUE;
+        }
+    }
+    MYLOG(0, "Check finished.\n");
+    if (pthread_rwlock_unlock(&entry->ip_list_lock) != 0) {
+        return FALSE;
+    }
+    return ret;
 }
 
 static void start_new_thread(dsn_time *read_cn)
@@ -300,6 +337,10 @@ static RETCODE init_conn(ConnectionClass *conn)
 	/* parsing ci->server to seperate IPs and store them into IP_list */
 	char *p = strtok(server, ",");
 	while (p != NULL) {
+        if (orig_entry.ip_count >= MAX_CN) {
+            MYLOG(0, "The number of configured IPs exceeds the limit %d.\n", MAX_CN);
+            return SQL_ERROR;
+        }
 		STRCPY_FIXED(orig_entry.ip_list[orig_entry.ip_count++], p);
 		STRCPY_FIXED(pgxc_entry.ip_list[pgxc_entry.ip_count++], p);
 		p = strtok(NULL, ",");
@@ -308,6 +349,10 @@ static RETCODE init_conn(ConnectionClass *conn)
 	/* parsing ci->port to seperate PORTs and store them into port_list */
 	p = strtok(port, ",");
 	while (p != NULL) {
+        if (orig_entry.port_count >= MAX_CN) {
+            MYLOG(0, "The number of configured ports exceeds the limit %d.\n", MAX_CN);
+            return SQL_ERROR;
+        }
 		STRCPY_FIXED(orig_entry.port_list[orig_entry.port_count++], p);
 		STRCPY_FIXED(pgxc_entry.port_list[pgxc_entry.port_count++], p);
 		p = strtok(NULL, ",");
@@ -350,6 +395,9 @@ int get_location(BOOL *visited, CnEntry *entry, int *visited_count)
 	if (visited == NULL || entry == NULL || visited_count == NULL) {
 		return -1;
 	}
+    if (entry->ip_count <= 0) {
+        return -1;
+    }
 	/* select random IP from ip_list */
 	srand(pthread_self());
 	unsigned int ind = rand() % entry->ip_count;
@@ -398,25 +446,31 @@ static RETCODE connect_random_IP(ConnectionClass *conn, CnEntry *entry)
 	ConnInfo *ci = &conn->connInfo;
 	CSTR func = "PGAPI_Connect";
 	char fchar;
+    char server[LARGE_REGISTRY_LEN];
+    char port[LARGE_REGISTRY_LEN];
 	BOOL visited[MAX_CN] = {FALSE};
 	int visited_count = 0;
-	BOOL check_ret = check_IP_connection(conn, entry);
+    int ind;
 
+    if (!check_IP_connection(conn, entry)) {
+        return SQL_ERROR;
+    }
+
+    if (pthread_rwlock_rdlock(&entry->ip_list_lock) != 0) {
+        return SQL_ERROR;
+    }
 	/* only connection successful and all connection failed will break the while loop */
 	while (ret == SQL_ERROR) {
-		if (entry == &pgxc_entry && pthread_rwlock_rdlock(&entry->ip_list_lock) != 0) {
-			return SQL_ERROR;
-		}
+        ind = get_location(visited, entry, &visited_count);
+        if (ind == -1) {
+            pthread_rwlock_unlock(&entry->ip_list_lock);
+            return SQL_ERROR;
+        }
 
-		int ind = get_location(visited, entry, &visited_count);
-		if (ind == -1) {
-			pthread_rwlock_unlock(&entry->ip_list_lock);
-			return SQL_ERROR;
-		}
-
-		STRCPY_FIXED(ci->server, entry->ip_list[ind]);
-		STRCPY_FIXED(ci->port, entry->port_list[ind]);
-		while (entry == &pgxc_entry && pthread_rwlock_unlock(&entry->ip_list_lock) != 0);
+        STRCPY_FIXED(server, entry->ip_list[ind]);
+        STRCPY_FIXED(port, entry->port_list[ind]);
+        STRCPY_FIXED(ci->server, server);
+        STRCPY_FIXED(ci->port, port);
 		if ((fchar = CC_connect(conn, NULL)) <= 0) {
 			/* Error messages are filled in */
 			CC_log_error(func, "Error on CC_connect", conn);
@@ -425,6 +479,9 @@ static RETCODE connect_random_IP(ConnectionClass *conn, CnEntry *entry)
 			ret = SQL_SUCCESS;
 		}
 	}
+    if (pthread_rwlock_unlock(&entry->ip_list_lock) != 0) {
+        return SQL_ERROR;
+    }
 	if (ret == SQL_SUCCESS && fchar == 2) {
 		ret = SQL_SUCCESS_WITH_INFO;
 	}

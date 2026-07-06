@@ -39,6 +39,7 @@
 
 #define	FORCE_PASSWORD_DISPLAY
 #define	NULL_IF_NULL(a) (a ? a : "(NULL)")
+#define MS_JET_CONNSTR_MAX_LEN 255
 
 #ifndef FORCE_PASSWORD_DISPLAY
 static char * hide_password(const char *str)
@@ -115,23 +116,22 @@ PGAPI_DriverConnect(HDBC hdbc,
 	SQLSMALLINT	lenStrout;
 	int		reqs = 0;
 
-
 	MYLOG(0, "entering...\n");
 
-	if (!conn)
-	{
-		CC_log_error(func, "", NULL);
-		return SQL_INVALID_HANDLE;
-	}
+    if (!conn) {
+        CC_log_error(func, "", NULL);
+        return SQL_INVALID_HANDLE;
+    }
+    if (szConnStrOut && cbConnStrOutMax < 0) {
+        CC_set_error(conn, CONN_INVALID_ARGUMENT_NO, "The ConnStrOut buffer length is invalid.", func);
+        return SQL_ERROR;
+    }
 
-	connStrIn = make_string(szConnStrIn, cbConnStrIn, NULL, 0);
-
-	/* CodeDEX with CID=11878 */
-	if (NULL == connStrIn)
-	{
-		CC_set_error(conn, CONN_NO_MEMORY_ERROR, "Out of memory while making_string for connStrIn", func);
-		return SQL_ERROR;
-	}
+    connStrIn = make_string(szConnStrIn, cbConnStrIn, NULL, 0);
+    if (NULL == connStrIn) {
+        CC_set_error(conn, CONN_NO_MEMORY_ERROR, "Out of memory while making_string for connStrIn", func);
+        return SQL_ERROR;
+    }
 
 #ifdef	FORCE_PASSWORD_DISPLAY
 	MYLOG(0, "**** fDriverCompletion=%d, connStrIn='%s'\n", fDriverCompletion, connStrIn);
@@ -268,11 +268,12 @@ MYLOG(DETAIL_LOG_LEVEL, "before CC_connect\n");
 	 */
 	result = (1 == retval ? SQL_SUCCESS : SQL_SUCCESS_WITH_INFO);
 
-	lenStrout = cbConnStrOutMax;
-	if (conn->ms_jet && lenStrout > 255)
-		lenStrout = 255;
-	makeConnectString(connStrOut, ci, lenStrout);
-	len = strlen(connStrOut);
+    lenStrout = cbConnStrOutMax > 0 ? cbConnStrOutMax : 0;
+    if (conn->ms_jet && lenStrout > MS_JET_CONNSTR_MAX_LEN) {
+        lenStrout = MS_JET_CONNSTR_MAX_LEN;
+    }
+    makeConnectString(connStrOut, ci, lenStrout);
+    len = strlen(connStrOut);
 
 	if (szConnStrOut)
 	{
@@ -285,7 +286,9 @@ MYLOG(DETAIL_LOG_LEVEL, "before CC_connect\n");
 		 * applications (Access) by implementing the correct behavior,
 		 * anyway.
 		 */
-		strncpy((char *) szConnStrOut, connStrOut, cbConnStrOutMax);
+        if (cbConnStrOutMax > 0) {
+            strncpy((char *) szConnStrOut, connStrOut, (size_t) cbConnStrOutMax);
+        }
 
 		if (len >= cbConnStrOutMax)
 		{

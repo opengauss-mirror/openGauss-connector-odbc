@@ -943,12 +943,6 @@ MYLOG(0, "drivername=%s\n", drivername);
 	if (SQLGetPrivateProfileString(DSN, INI_USERNAME, NULL_STRING, temp, sizeof(temp), ODBC_INI) > 0)
 		STRCPY_FIXED(ci->username, temp);
 
-	if (SQLGetPrivateProfileString(DSN, INI_PASSWORD, NULL_STRING, temp, sizeof(temp), ODBC_INI) > 0)
-	{
-		ci->password = decode(temp);
-		if (strlen(temp))
-			memset(temp, 0, strlen(temp));
-	}
 	if (SQLGetPrivateProfileString(DSN, INI_PORT, NULL_STRING, temp, sizeof(temp), ODBC_INI) > 0)
 		STRCPY_FIXED(ci->port, temp);
 
@@ -1298,9 +1292,7 @@ void
 writeDSNinfo(const ConnInfo *ci)
 {
 	const char *DSN = ci->dsn;
-	char		encoded_item[MEDIUM_REGISTRY_LEN],
-				temp[SMALL_REGISTRY_LEN];
-
+    char temp[SMALL_REGISTRY_LEN];
 
 	SQLWritePrivateProfileString(DSN,
 								 INI_KDESC,
@@ -1328,11 +1320,7 @@ writeDSNinfo(const ConnInfo *ci)
 								 ODBC_INI);
 	SQLWritePrivateProfileString(DSN, INI_UID, ci->username, ODBC_INI);
 
-	encode(ci->password, encoded_item, sizeof(encoded_item));
-	SQLWritePrivateProfileString(DSN,
-								 INI_PASSWORD,
-								 encoded_item,
-								 ODBC_INI);
+    SQLWritePrivateProfileString(DSN, INI_PASSWORD, "", ODBC_INI);
 
 	SQLWritePrivateProfileString(DSN,
 								 TARGET_SESSION_ATTRS,
