@@ -3504,11 +3504,13 @@ hide_url_password(const char *url)
 	const char *sensitive[] = {"password", "sslcert", "sslkey", "sslrootcert", "sslcrl", NULL};
 	int		 i;
 
-	if (!url)
+	if (!url) {
 		return NULL;
+	}
 	outurl = strdup(url);
-	if (!outurl)
+	if (!outurl) {
 		return NULL;
+	}
 
 	for (i = 0; sensitive[i]; i++)
 	{
@@ -3523,8 +3525,9 @@ hide_url_password(const char *url)
 			{
 				char	*v;
 
-				for (v = p + plen; *v && *v != '&'; v++)
+				for (v = p + plen; *v && *v != '&'; v++) {
 					*v = 'x';
+				}
 			}
 			p++;
 		}
@@ -3788,14 +3791,15 @@ LIBPQ_connect(ConnectionClass *self)
             const char **popt, **pval;
             QLOG(0, "PQconnectdbParams:");
             for (popt = opts, pval = vals; *popt; popt++, pval++) {
-                if (stricmp(*popt, "password") == 0)
+                if (stricmp(*popt, "password") == 0) {
                     QPRINTF(0, " %s='xxxxx'", *popt);
-                else if (stricmp(*popt, "sslcert") == 0 ||
+                } else if (stricmp(*popt, "sslcert") == 0 ||
                          stricmp(*popt, "sslkey") == 0 ||
-                         stricmp(*popt, "sslrootcert") == 0)
+                         stricmp(*popt, "sslrootcert") == 0) {
                     QPRINTF(0, " %s='xxxx'", *popt);
-                else
+                } else {
                     QPRINTF(0, " %s='%s'", *popt, *pval);
+                }
             }
             QPRINTF(0, "\n");
         }

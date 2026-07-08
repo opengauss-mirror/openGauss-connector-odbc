@@ -38,11 +38,17 @@ test_connect_ext(char *extraparams)
 		const char *database = getenv("ODBC_DATABASE");
 
 		if (!server || !server[0])
+		{
 			server = "127.0.0.1";
+		}
 		if (!port || !port[0])
+		{
 			port = "5432";
+		}
 		if (!database || !database[0])
+		{
 			database = "postgres";
+		}
 
 		/*
 		 * unixODBC may ignore a DRIVER keyword when a DSN keyword is also

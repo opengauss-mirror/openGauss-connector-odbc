@@ -11,6 +11,12 @@
 #include <sqlucode.h>
 #endif
 
+#define PWD_PREFIX_LEN 4
+#define MAX_FETCH_DIAGNOSTIC 200
+#define LONG_PATH_LEN 1000
+#define ALPHABET_SIZE 26
+#define LARGE_RESULT_ROW_COUNT 100000
+
 /*
  * Regression tests for security fixes in odbc-brainafk/漏洞清单.csv rows 7-15.
  *
@@ -90,7 +96,9 @@ test_sqlputdata_negative_length(void)
 
 	rc = SQLExecute(hstmt);
 	if (rc != SQL_NEED_DATA)
+	{
 		CHECK_STMT_RESULT(rc, "SQLExecute failed", hstmt);
+	}
 
 	/* SQLPutData with an invalid negative length (-2) must fail. */
 	rc = SQLPutData(hstmt, buf, -2);
@@ -156,7 +164,9 @@ test_descriptor_uaf(void)
 
 	rc = SQLFetch(hstmt);
 	if (rc != SQL_SUCCESS && rc != SQL_SUCCESS_WITH_INFO)
+	{
 		CHECK_STMT_RESULT(rc, "SQLFetch failed after descriptor free", hstmt);
+	}
 
 	if (val != 1)
 	{
@@ -188,11 +198,17 @@ build_connect_string(char *buf, size_t bufsize, const char *extra)
 		const char *database = getenv("ODBC_DATABASE");
 
 		if (!server || !server[0])
+		{
 			server = "127.0.0.1";
+		}
 		if (!port || !port[0])
+		{
 			port = "5432";
+		}
 		if (!database || !database[0])
+		{
 			database = "postgres";
+		}
 
 		snprintf(buf, bufsize,
 				 "DRIVER=%s;SERVER=%s;PORT=%s;DATABASE=%s;"
@@ -223,9 +239,13 @@ dump_mylog_lines(const char *keywords)
 
 	username = getenv("USER");
 	if (!username)
+	{
 		username = getenv("LOGNAME");
+	}
 	if (!username)
+	{
 		username = "unknown";
+	}
 
 	snprintf(filename, sizeof(filename),
 			 "/tmp/mylog_security-fix-test_%s%u.log", username, (unsigned) pid);
@@ -241,7 +261,9 @@ dump_mylog_lines(const char *keywords)
 	while (fgets(line, sizeof(line), fp))
 	{
 		if (strstr(line, keywords))
+		{
 			printf("%s", line);
+		}
 	}
 	printf("--- end MYLOG diagnostics ---\n");
 	fclose(fp);
@@ -259,7 +281,9 @@ dump_loaded_driver_path(void)
 	int found = 0;
 
 	if (!fp)
+	{
 		return;
+	}
 
 	printf("--- loaded psqlodbcw.so paths ---\n");
 	while (fgets(line, sizeof(line), fp))
@@ -271,7 +295,9 @@ dump_loaded_driver_path(void)
 		}
 	}
 	if (!found)
+	{
 		printf("(none)\n");
+	}
 	printf("--- end loaded paths ---\n");
 	fclose(fp);
 }
@@ -312,8 +338,8 @@ test_result_set_cap(void)
 		masked[sizeof(masked) - 1] = '\0';
 		if ((p = strstr(masked, "PWD=")) != NULL)
 		{
-			char *end = strchr(p + 4, ';');
-			memset(p + 4, 'x', end ? (size_t)(end - (p + 4)) : strlen(p + 4));
+			char *end = strchr(p + PWD_PREFIX_LEN, ';');
+			memset(p + PWD_PREFIX_LEN, 'x', end ? (size_t)(end - (p + PWD_PREFIX_LEN)) : strlen(p + PWD_PREFIX_LEN));
 		}
 		printf("cap test connection string: %s\n", masked);
 	}
@@ -347,7 +373,9 @@ test_result_set_cap(void)
 						  errmsg, sizeof(errmsg), &errlen) != SQL_ERROR)
 		{
 			if (strstr((char *) errmsg, "maximum allowed rows") != NULL)
+			{
 				cap_hit = 1;
+			}
 		}
 	}
 
@@ -375,8 +403,10 @@ test_result_set_cap(void)
 			   rc2 == SQL_SUCCESS_WITH_INFO)
 		{
 			fetched++;
-			if (fetched >= 200)
+			if (fetched >= MAX_FETCH_DIAGNOSTIC)
+			{
 				break;
+			}
 		}
 		fprintf(stderr, "      fetched %ld rows (%s)%s\n",
 				(long) fetched,
@@ -412,9 +442,11 @@ test_long_sslcert_path(void)
 	/* Build a 1000-character dummy path that does not exist. */
 	memset(longpath, 0, sizeof(longpath));
 	strcpy(longpath, "/tmp/");
-	for (i = strlen(longpath); i < 1000; i++)
-		longpath[i] = 'a' + (i % 26);
-	longpath[1000] = '\0';
+	for (i = strlen(longpath); i < LONG_PATH_LEN; i++)
+	{
+		longpath[i] = 'a' + (i % ALPHABET_SIZE);
+	}
+	longpath[LONG_PATH_LEN] = '\0';
 
 	snprintf(extra, sizeof(extra),
 			 "sslmode=verify-ca;sslcert=%s;sslkey=%s;sslrootcert=%s",
@@ -501,9 +533,13 @@ check_log_redaction(const char *password,
 
 	username = getenv("USER");
 	if (!username)
+	{
 		username = getenv("LOGNAME");
+	}
 	if (!username)
+	{
 		username = "unknown";
+	}
 
 	/*
 	 * Default MYLOG path on Linux: /tmp/mylog_<exe>_<user><pid>.log
@@ -537,29 +573,47 @@ check_log_redaction(const char *password,
 		if ((strstr(line, "PWD=") && strstr(line, "PWD=xxxxx")) ||
 		    strstr(line, "password=xxxxx") ||
 		    strstr(line, "password='xxxxx'"))
+		{
 			found_pwd_masked = 1;
+		}
 		if (strstr(line, "sslcert=") &&
 		    (strstr(line, "sslcert=xxxx") || strstr(line, "sslcert='xxxx'")))
+		{
 			found_sslcert_masked = 1;
+		}
 		if (strstr(line, "sslkey=") &&
 		    (strstr(line, "sslkey=xxxx") || strstr(line, "sslkey='xxxx'")))
+		{
 			found_sslkey_masked = 1;
+		}
 		if (strstr(line, "sslrootcert=") &&
 		    (strstr(line, "sslrootcert=xxxx") || strstr(line, "sslrootcert='xxxx'")))
+		{
 			found_sslrootcert_masked = 1;
+		}
 	}
 	fclose(fp);
 
 	if (!found_plain)
+	{
 		printf("OK: no plaintext password/SSL values found in MYLOG\n");
+	}
 	if (found_pwd_masked)
+	{
 		printf("OK: MYLOG masks password\n");
+	}
 	if (found_sslcert_masked)
+	{
 		printf("OK: MYLOG masks sslcert\n");
+	}
 	if (found_sslkey_masked)
+	{
 		printf("OK: MYLOG masks sslkey\n");
+	}
 	if (found_sslrootcert_masked)
+	{
 		printf("OK: MYLOG masks sslrootcert\n");
+	}
 
 	return found_plain ? 1 : 0;
 }
@@ -607,7 +661,9 @@ test_log_password_redaction(void)
 	SQLFreeConnect(hdbc);
 
 	if (check_log_redaction(password, sslcert, sslkey, sslrootcert) != 0)
+	{
 		exit(1);
+	}
 }
 
 static void
@@ -633,7 +689,7 @@ test_large_result_set(void)
 	while ((rc = SQLFetch(hstmt)) == SQL_SUCCESS || rc == SQL_SUCCESS_WITH_INFO)
 		rows++;
 
-	if (rows != 100000)
+	if (rows != LARGE_RESULT_ROW_COUNT)
 	{
 		fprintf(stderr, "FAIL: expected 100000 rows, got %ld\n", (long) rows);
 		exit(1);

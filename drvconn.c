@@ -46,9 +46,15 @@ static char * hide_password(const char *str)
 	const char *sensitive[] = {"PWD", "pwd", "sslcert", "sslkey", "sslrootcert", "sslcrl", NULL};
 	int i;
 
-	if (!str)	return NULL;
+	if (!str)
+	{
+		return NULL;
+	}
 	outstr = strdup(str);
-	if (!outstr) return NULL;
+	if (!outstr)
+	{
+		return NULL;
+	}
 
 	for (i = 0; sensitive[i]; i++)
 	{
@@ -64,7 +70,9 @@ static char * hide_password(const char *str)
 				char *v;
 
 				for (v = p + plen; *v && *v != ';'; v++)
+				{
 					*v = 'x';
+				}
 			}
 			p++;
 		}
