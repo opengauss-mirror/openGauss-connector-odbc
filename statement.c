@@ -3159,11 +3159,19 @@ SC_set_errorinfo(StatementClass *self, QResultClass *res, int errkind)
 			switch (errkind)
 			{
 				case 1:
-					SC_set_error_if_not_set(self, STMT_EXEC_ERROR, "Error while fetching the next result", __FUNCTION__);
-					break;
+				{
+					const char *msg = QR_get_message(res);
+					SC_set_error_if_not_set(self, STMT_EXEC_ERROR,
+						msg && msg[0] ? msg : "Error while fetching the next result", __FUNCTION__);
+				}
+				break;
 				default:
-					SC_set_error_if_not_set(self, STMT_EXEC_ERROR, "Error while executing the query", __FUNCTION__);
-					break;
+				{
+					const char *msg = QR_get_message(res);
+					SC_set_error_if_not_set(self, STMT_EXEC_ERROR,
+						msg && msg[0] ? msg : "Error while executing the query", __FUNCTION__);
+				}
+				break;
 			}
 			break;
 	}

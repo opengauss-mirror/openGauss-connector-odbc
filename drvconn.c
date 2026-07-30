@@ -37,26 +37,46 @@
 
 #include "dlg_specific.h"
 
-#define	FORCE_PASSWORD_DISPLAY
 #define	NULL_IF_NULL(a) (a ? a : "(NULL)")
 #define MS_JET_CONNSTR_MAX_LEN 255
 
 #ifndef FORCE_PASSWORD_DISPLAY
 static char * hide_password(const char *str)
 {
-	char *outstr, *pwdp;
+	char *outstr;
+	const char *sensitive[] = {"PWD", "pwd", "sslcert", "sslkey", "sslrootcert", "sslcrl", NULL};
+	int i;
 
-	if (!str)	return NULL;
-	outstr = strdup(str);
-	if (!outstr) return NULL;
-	if (pwdp = strstr(outstr, "PWD="), !pwdp)
-		pwdp = strstr(outstr, "pwd=");
-	if (pwdp)
+	if (!str)
 	{
-		char	*p;
+		return NULL;
+	}
+	outstr = strdup(str);
+	if (!outstr)
+	{
+		return NULL;
+	}
 
-		for (p=pwdp + 4; *p && *p != ';'; p++)
-			*p = 'x';
+	for (i = 0; sensitive[i]; i++)
+	{
+		const char *param = sensitive[i];
+		size_t plen = strlen(param) + 1;	/* include trailing '=' */
+		char *p = outstr;
+
+		while ((p = strstr(p, param)) != NULL)
+		{
+			/* mask only proper attributes: ;param=... or start-of-string param=... */
+			if ((p == outstr || p[-1] == ';') && p[plen - 1] == '=')
+			{
+				char *v;
+
+				for (v = p + plen; *v && *v != ';'; v++)
+				{
+					*v = 'x';
+				}
+			}
+			p++;
+		}
 	}
 	return outstr;
 }

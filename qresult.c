@@ -26,6 +26,11 @@
 #include <string.h>
 #include <limits.h>
 
+/* Maximum number of rows to materialize in memory per result set */
+#define QR_MAX_BACKEND_TUPLES		10000000
+#define QR_MAX_BACKEND_TUPLES_HALF	(QR_MAX_BACKEND_TUPLES / 2)
+#define TUPLE_GROWTH_FACTOR		2
+
 static BOOL QR_prepare_for_tupledata(QResultClass *self);
 static BOOL QR_read_tuples_from_pgres(QResultClass *, PGresult **pgres);
 
@@ -819,9 +824,21 @@ MYLOG(DETAIL_LOG_LEVEL, "entering %p->num_fields=%d\n", self, self->num_fields);
 
 			MYLOG(0, "REALLOC: old_count = " FORMAT_LEN ", size = " FORMAT_SIZE_T "\n", tuple_size, self->num_fields * sizeof(TupleField) * tuple_size);
 			if (tuple_size < 1)
+			{
 				tuple_size = TUPLE_MALLOC_INC;
+			}
+			else if (tuple_size >= QR_MAX_BACKEND_TUPLES_HALF)
+			{
+				QR_set_rstatus(self, PORES_FATAL_ERROR);
+				QR_set_message(self, "Result set exceeds maximum allowed rows");
+				return FALSE;
+			}
 			else
-				tuple_size *= 2;
+			{
+				tuple_size *= TUPLE_GROWTH_FACTOR;
+				if (tuple_size > QR_MAX_BACKEND_TUPLES_HALF)
+					tuple_size = QR_MAX_BACKEND_TUPLES_HALF;
+			}
 			QR_REALLOC_return_with_error(self->backend_tuples, TupleField, tuple_size * self->num_fields * sizeof(TupleField), self, "Out of memory while reading tuples.", FALSE);
 			self->count_backend_allocated = tuple_size;
 		}
@@ -831,9 +848,21 @@ MYLOG(DETAIL_LOG_LEVEL, "entering %p->num_fields=%d\n", self, self->num_fields);
 			SQLULEN	tuple_size = self->count_keyset_allocated;
 
 			if (tuple_size < 1)
+			{
 				tuple_size = TUPLE_MALLOC_INC;
+			}
+			else if (tuple_size >= QR_MAX_BACKEND_TUPLES_HALF)
+			{
+				QR_set_rstatus(self, PORES_FATAL_ERROR);
+				QR_set_message(self, "Result set keyset exceeds maximum allowed rows");
+				return FALSE;
+			}
 			else
-				tuple_size *= 2;
+			{
+				tuple_size *= TUPLE_GROWTH_FACTOR;
+				if (tuple_size > QR_MAX_BACKEND_TUPLES_HALF)
+					tuple_size = QR_MAX_BACKEND_TUPLES_HALF;
+			}
 			QR_REALLOC_return_with_error(self->keyset, KeySet, sizeof(KeySet) * tuple_size, self, "Out of mwmory while allocating keyset", FALSE);
 			memset(&self->keyset[self->count_keyset_allocated],
 				   0,

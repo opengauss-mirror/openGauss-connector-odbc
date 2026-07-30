@@ -421,6 +421,22 @@ PGAPI_FreeDesc(SQLHDESC DescriptorHandle)
 				break;
 			}
 		}
+		/* Revert dangling descriptor references to embedded descriptors */
+		for (i = 0; i < conn->num_stmts; i++)
+		{
+			StatementClass *stmt = conn->stmts[i];
+
+			if (!stmt)
+				continue;
+			if (stmt->ard == desc)
+				stmt->ard = &stmt->ardi;
+			if (stmt->apd == desc)
+				stmt->apd = &stmt->apdi;
+			if (stmt->ird == desc)
+				stmt->ird = &stmt->irdi;
+			if (stmt->ipd == desc)
+				stmt->ipd = &stmt->ipdi;
+		}
 		free(desc);
 	}
 	return ret;

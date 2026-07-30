@@ -1608,7 +1608,16 @@ PGAPI_PutData(HSTMT hstmt,
 	if (!lenset)
 	{
 		if (cbValue < 0)
-			putlen = cbValue;
+		{
+			if (cbValue == SQL_NULL_DATA)
+				putlen = 0;
+			else
+			{
+				SC_set_error(stmt, STMT_INVALID_ARGUMENT_NO, "Invalid negative length in SQLPutData", func);
+				retval = SQL_ERROR;
+				goto cleanup;
+			}
+		}
 		else
 #ifdef	UNICODE_SUPPORT
 		if (ctype == SQL_C_CHAR || ctype == SQL_C_BINARY || ctype == SQL_C_WCHAR)

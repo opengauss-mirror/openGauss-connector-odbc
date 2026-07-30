@@ -3095,7 +3095,7 @@ MYLOG(DETAIL_LOG_LEVEL, "type=%d concur=%d\n", stmt->options.cursor_type, stmt->
 		}
 		if (SC_is_fetchcursor(stmt))
 		{
-			snprintfcat(new_statement, qb->str_alsize, 
+			snprintfcat(new_statement, qb->str_alsize,
 				"declare \"%s\"%s cursor%s for ",
 				SC_cursor_name(stmt), opt_scroll, opt_hold);
 			qb->npos = strlen(new_statement);
