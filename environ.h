@@ -56,6 +56,9 @@ ConnectionClass * const *getConnList(void);
 
 /* For Multi-thread */
 #if defined( WIN_MULTITHREAD_SUPPORT)
+extern CRITICAL_SECTION	conns_cs;
+extern CRITICAL_SECTION	common_cs;
+extern CRITICAL_SECTION	common_lcs;
 #define	INIT_CONNS_CS	InitializeCriticalSection(&conns_cs)
 #define	ENTER_CONNS_CS	EnterCriticalSection(&conns_cs)
 #define	LEAVE_CONNS_CS	LeaveCriticalSection(&conns_cs)
@@ -69,6 +72,9 @@ ConnectionClass * const *getConnList(void);
 #define LEAVE_COMMON_CS		LeaveCriticalSection(&common_cs)
 #define DELETE_COMMON_CS	DeleteCriticalSection(&common_cs)
 #elif defined(POSIX_MULTITHREAD_SUPPORT)
+extern pthread_mutex_t	conns_cs;
+extern pthread_mutex_t	common_cs;
+extern pthread_mutex_t	common_lcs;
 #define	INIT_CONNS_CS	pthread_mutex_init(&conns_cs,0)
 #define	ENTER_CONNS_CS	pthread_mutex_lock(&conns_cs)
 #define	LEAVE_CONNS_CS	pthread_mutex_unlock(&conns_cs)

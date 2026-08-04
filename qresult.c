@@ -29,6 +29,7 @@
 /* Maximum number of rows to materialize in memory per result set */
 #define QR_MAX_BACKEND_TUPLES		10000000
 #define QR_MAX_BACKEND_TUPLES_HALF	(QR_MAX_BACKEND_TUPLES / 2)
+#define QR_NOTICE_MAXLEN		8192
 #define TUPLE_GROWTH_FACTOR		2
 
 static BOOL QR_prepare_for_tupledata(QResultClass *self);
@@ -419,22 +420,46 @@ QR_add_notice(QResultClass *self, const char *msg)
 	size_t	alsize, pos, addlen;
 
 	if (!msg || !msg[0])
+	{
 		return;
+	}
 	addlen = strlen(msg);
 	if (message)
 	{
-		pos = strlen(message) + 1;
+		size_t	curlen = strlen(message);
+
+		if (curlen >= QR_NOTICE_MAXLEN)
+		{
+			return;
+		}
+		pos = curlen + 1;
+		if (addlen > QR_NOTICE_MAXLEN - pos)
+		{
+			addlen = QR_NOTICE_MAXLEN - pos;
+		}
+		if (addlen == 0)
+		{
+			return;
+		}
 		alsize = pos + addlen + 1;
 	}
 	else
 	{
 		pos = 0;
+		if (addlen > QR_NOTICE_MAXLEN)
+		{
+			addlen = QR_NOTICE_MAXLEN;
+		}
 		alsize = addlen + 1;
 	}
 	if (message = realloc(message, alsize), NULL == message)
+	{
 		return;
+	}
 	if (pos > 0)
+	{
 		message[pos - 1] = ';';
+	}
 	strncpy_null(message + pos, msg, addlen + 1);
 	self->notice = message;
 }

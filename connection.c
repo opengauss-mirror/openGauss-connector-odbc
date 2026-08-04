@@ -136,12 +136,11 @@ static void *read_pgxc_node(void *arg)
 {
 	dsn_time read_cn;
 	read_cn = *(dsn_time *) arg;
-	char *DSN = malloc(strlen(read_cn.DSN) + 1);
+	free(arg);
+	char *DSN = read_cn.DSN;
 	if (DSN == NULL) {
 		exit(1);
 	}
-	strncpy_null(DSN, read_cn.DSN, strlen(read_cn.DSN) + 1);
-	read_cn.DSN = DSN;
 	int time = read_cn.timeinterval;
 #ifdef WIN32
 	pgxc_node_thread_id = GetCurrentThreadId();
@@ -297,14 +296,43 @@ static BOOL check_IP_connection(ConnectionClass *conn, CnEntry *entry)
     return ret;
 }
 
-static void start_new_thread(dsn_time *read_cn)
-{	
+static BOOL start_new_thread(const dsn_time *read_cn)
+{
+	dsn_time *thread_arg;
+
+	if (read_cn == NULL || read_cn->DSN == NULL) {
+		return FALSE;
+	}
+	thread_arg = (dsn_time *) malloc(sizeof(*thread_arg));
+	if (thread_arg == NULL) {
+		return FALSE;
+	}
+	thread_arg->DSN = strdup(read_cn->DSN);
+	if (thread_arg->DSN == NULL) {
+		free(thread_arg);
+		return FALSE;
+	}
+	thread_arg->timeinterval = read_cn->timeinterval;
 #ifdef WIN32
-	CreateThread(NULL, 0, read_pgxc_node, (LPVOID)(read_cn), 0, NULL);
+	{
+		HANDLE thread = CreateThread(NULL, 0, read_pgxc_node, (LPVOID)(thread_arg), 0, NULL);
+		if (thread == NULL) {
+			free(thread_arg->DSN);
+			free(thread_arg);
+			return FALSE;
+		}
+		CloseHandle(thread);
+	}
 #else
 	pthread_t ntid;
-	pthread_create(&ntid, NULL, read_pgxc_node, read_cn);
+	if (pthread_create(&ntid, NULL, read_pgxc_node, thread_arg) != 0) {
+		free(thread_arg->DSN);
+		free(thread_arg);
+		return FALSE;
+	}
+	pthread_detach(ntid);
 #endif
+	return TRUE;
 }
 
 static RETCODE init_conn(ConnectionClass *conn)
@@ -387,7 +415,9 @@ static RETCODE init_conn(ConnectionClass *conn)
 	} else {
 		read_cn.timeinterval = ci->refreshcnlisttime;
 	}
-	start_new_thread(&read_cn);
+	if (!start_new_thread(&read_cn)) {
+		return SQL_ERROR;
+	}
 	return ret;
 }
 
@@ -4685,4 +4715,3 @@ CC_set_transact(ConnectionClass *self, UInt4 isolation)
 
 	return TRUE;
 }
-

@@ -79,5 +79,6 @@ On Linux the driver reads its global `Debug` setting from `odbcinst.ini`.
 | #6 | Unbounded result-set materialization | `test_result_set_cap` |
 | #7 | libpq URL buffer overflow | `test_long_sslcert_path` |
 | #8 | `SQLBindParameter(ipar=0)` out-of-bounds write | `test_bind_parameter_zero` |
+| #10 | `SQLPrepareW` orphan UTF-16 high surrogate handling | `test_sqlpreparew_orphan_surrogate` (Linux when `SQLWCHAR` is 2 bytes, and Windows) |
 
 | #9 | `SQLConnectW` length validation | `test_sqlconnectw_invalid_length` (Windows only) |

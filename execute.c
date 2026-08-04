@@ -1208,16 +1208,24 @@ PGAPI_Transact(HENV henv,
 	 */
 	if (hdbc == SQL_NULL_HDBC && henv != SQL_NULL_HENV)
 	{
-		ConnectionClass * const *conns = getConnList();
-		const int	conn_count = getConnCount();
+		ConnectionClass * const *conns;
+		int	conn_count;
+
+		ENTER_CONNS_CS;
+		conns = getConnList();
+		conn_count = getConnCount();
 		for (lf = 0; lf < conn_count; lf++)
 		{
 			conn = conns[lf];
 
 			if (conn && CC_get_env(conn) == henv)
 				if (PGAPI_Transact(henv, (HDBC) conn, fType) != SQL_SUCCESS)
+				{
+					LEAVE_CONNS_CS;
 					return SQL_ERROR;
+				}
 		}
+		LEAVE_CONNS_CS;
 		return SQL_SUCCESS;
 	}
 
