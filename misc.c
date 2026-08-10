@@ -28,7 +28,59 @@
 #else
 #include <process.h>			/* Byron: is this where Windows keeps def.
 								 * of getpid ? */
+#include <windows.h>
 #endif
+
+#if defined(__has_include)
+# if __has_include("securec.h")
+#  include "securec.h"
+#  define PG_ODBC_HAVE_MEMSET_S 1
+# elif __has_include(<securec.h>)
+#  include <securec.h>
+#  define PG_ODBC_HAVE_MEMSET_S 1
+# endif
+#endif
+
+#if defined(WIN32) && !defined(PG_ODBC_HAVE_MEMSET_S)
+/* Windows builds link Huawei libsecurec (see CMakeLists.txt). */
+extern int memset_s(void *dest, size_t destMax, int c, size_t count);
+# define PG_ODBC_HAVE_MEMSET_S 1
+#endif
+
+/*
+ * Overwrite sensitive bytes so compilers cannot elide the wipe.
+ * Prefer memset_s; fall back to SecureZeroMemory / explicit_bzero / volatile stores.
+ */
+void
+secure_zeromem(void *ptr, size_t len)
+{
+	if (ptr == NULL || len == 0)
+		return;
+
+#ifdef PG_ODBC_HAVE_MEMSET_S
+	(void) memset_s(ptr, len, 0, len);
+#elif defined(WIN32)
+	SecureZeroMemory(ptr, len);
+#elif defined(HAVE_EXPLICIT_BZERO)
+	explicit_bzero(ptr, len);
+#else
+	{
+		volatile unsigned char *p = (volatile unsigned char *) ptr;
+
+		while (len--)
+			*p++ = 0;
+	}
+#endif
+}
+
+void
+secure_free(void *ptr, size_t len)
+{
+	if (ptr == NULL)
+		return;
+	secure_zeromem(ptr, len);
+	free(ptr);
+}
 
 /*
  *	returns STRCPY_FAIL, STRCPY_TRUNCATED, or #bytes copied

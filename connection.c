@@ -107,7 +107,7 @@ CnEntry pgxc_entry;
 
 static int LIBPQ_connect(ConnectionClass *self);
 int split_host_or_port_with_limit(const char *str, char *result_array[MAX_PARTS], int* total_length);
-char* generate_conninfo_URL_by_ConnInfo(ConnInfo* ci, int* host_number, int* port_number);
+static int validate_server_port(ConnInfo *ci, int *host_number, int *port_number);
 
 static BOOL
 cn_entry_contains(const CnEntry *entry, const char *host, const char *port)
@@ -486,9 +486,9 @@ static RETCODE connect_random_IP(ConnectionClass *conn, CnEntry *entry)
 		ret = SQL_SUCCESS_WITH_INFO;
 	}
 	MYLOG(0, "leaving..%d.\n", ret);
-	/* Empty the password stored in memory to avoid password leak */
-	if (NAME_IS_VALID(ci->password))
-		memset(ci->password.name, 0, strlen(ci->password.name));
+	/* Wipe password after successful connect to limit plaintext retention */
+	if (ret == SQL_SUCCESS || ret == SQL_SUCCESS_WITH_INFO)
+		CC_clear_password(ci);
 	return ret;
 }
 
@@ -650,7 +650,7 @@ PGAPI_Connect(HDBC hdbc,
 	{
 		if (tmpstr[0]) /* non-empty string is specified */
 			STR_TO_NAME(ci->password, tmpstr);
-		free(tmpstr);
+		secure_free(tmpstr, strlen(tmpstr) + 1);
 	}
 
 	MYLOG(0, "conn = %p (DSN='%s', UID='%s', PWD='%s')\n", conn, ci->dsn, ci->username, NAME_IS_VALID(ci->password) ? "xxxxx" : "");
@@ -685,9 +685,8 @@ PGAPI_Connect(HDBC hdbc,
 			ret = SQL_SUCCESS_WITH_INFO;
 		}
 		MYLOG(0, "leaving..%d.\n", ret);
-		if (NAME_IS_VALID(ci->password)) {
-			memset(ci->password.name, 0, strlen(ci->password.name));
-		}
+		if (SQL_SUCCESS == ret || SQL_SUCCESS_WITH_INFO == ret)
+			CC_clear_password(ci);
 	}
 	return ret;
 }
@@ -3412,184 +3411,43 @@ int split_host_or_port_with_limit(const char *str, char *result_array[MAX_PARTS]
     return count;
 }
 
-char* generate_conninfo_URL_by_ConnInfo(ConnInfo* ci, int* host_number, int* port_number)
+/*
+ * Validate comma-separated host/port lists without building a URI that would
+ * embed the password in another heap buffer.
+ * Returns 0 on success, -2 empty, -1 OOM, -3 host/port count mismatch.
+ */
+static int
+validate_server_port(ConnInfo *ci, int *host_number, int *port_number)
 {
-    char *host_array[MAX_PARTS] = {0};
-    char *port_array[MAX_PARTS] = {0};
-    int host_length = 0;
-    int port_length = 0;
-    int valid_count;
-    int i;
-    PQExpBufferData urlbuf = {0};
-    BOOL urlbuf_initialized = FALSE;
-    char *result = NULL;
+	char	   *host_array[MAX_PARTS] = {0};
+	char	   *port_array[MAX_PARTS] = {0};
+	int			host_length = 0;
+	int			port_length = 0;
+	int			i;
+	int			rc = 0;
 
-    if (!ci->server || !ci->port) {
-        return NULL;
-    }
-    *host_number = split_host_or_port_with_limit(ci->server, host_array, &host_length);
-    *port_number = split_host_or_port_with_limit(ci->port, port_array, &port_length);
+	*host_number = 0;
+	*port_number = 0;
 
-    if ((-1 == *host_number || -1 == *port_number) ||
-        ((*host_number != *port_number) && *host_number != 1 && *port_number != 1)) {
-        goto cleanup;
-    }
+	if (!ci->server[0] || !ci->port[0])
+		return -2;
 
-    valid_count = *host_number > *port_number ? *host_number : *port_number;
+	*host_number = split_host_or_port_with_limit(ci->server, host_array, &host_length);
+	*port_number = split_host_or_port_with_limit(ci->port, port_array, &port_length);
 
-    initPQExpBuffer(&urlbuf);
-    urlbuf_initialized = TRUE;
-    appendPQExpBuffer(&urlbuf, "postgres://%s@", ci->username ? ci->username : "");
-    for (i = 0; i < valid_count; i++) {
-        appendPQExpBuffer(&urlbuf, "%s:%s",
-                          (*host_number == 1) ? host_array[0] : host_array[i],
-                          (*port_number == 1) ? port_array[0] : port_array[i]);
-        if (i != valid_count - 1) {
-            appendPQExpBufferStr(&urlbuf, ",");
-        }
-    }
-    appendPQExpBuffer(&urlbuf, "/%s", ci->database ? ci->database : "");
+	if (-1 == *host_number || -1 == *port_number)
+		rc = -1;
+	else if ((*host_number != *port_number) && *host_number != 1 && *port_number != 1)
+		rc = -3;
 
-    if (*host_number == 1 && *port_number == 1) {
-        appendPQExpBufferStr(&urlbuf, "?target_session_attrs=any");
-    } else if ('\0' == ci->target_session_attrs[0]) {
-        appendPQExpBufferStr(&urlbuf, "?target_session_attrs=read-write");
-    } else {
-        appendPQExpBuffer(&urlbuf, "?target_session_attrs=%s", ci->target_session_attrs);
-    }
-
-    appendPQExpBuffer(&urlbuf, "&password=%s", SAFE_NAME(ci->password));
-
-    if ('\0' != ci->sslmode[0]) {
-        appendPQExpBuffer(&urlbuf, "&sslmode=%s", ci->sslmode);
-    }
-    if ('\0' != ci->connect_timeout[0]) {
-        appendPQExpBuffer(&urlbuf, "&connect_timeout=%s", ci->connect_timeout);
-    }
-    if ('\0' != ci->rw_timeout[0]) {
-        appendPQExpBuffer(&urlbuf, "&rw_timeout=%s", ci->rw_timeout);
-    }
-    if ('\0' != ci->client_encoding[0]) {
-        appendPQExpBuffer(&urlbuf, "&client_encoding=%s", ci->client_encoding);
-    }
-    if ('\0' != ci->application_name[0]) {
-        appendPQExpBuffer(&urlbuf, "&application_name=%s", ci->application_name);
-    }
-    if ('\0' != ci->keepalives_idle[0]) {
-        appendPQExpBuffer(&urlbuf, "&keepalives_idle=%s", ci->keepalives_idle);
-    }
-    if ('\0' != ci->keepalives_interval[0]) {
-        appendPQExpBuffer(&urlbuf, "&keepalives_interval=%s", ci->keepalives_interval);
-    }
-    if ('\0' != ci->keepalives_count[0]) {
-        appendPQExpBuffer(&urlbuf, "&keepalives_count=%s", ci->keepalives_count);
-    }
-    if ('\0' != ci->tcp_user_timeout[0]) {
-        appendPQExpBuffer(&urlbuf, "&tcp_user_timeout=%s", ci->tcp_user_timeout);
-    }
-    if ('\0' != ci->sslcompression[0]) {
-        appendPQExpBuffer(&urlbuf, "&sslcompression=%s", ci->sslcompression);
-    }
-    if ('\0' != ci->sslcert[0]) {
-        appendPQExpBuffer(&urlbuf, "&sslcert=%s", ci->sslcert);
-    }
-    if ('\0' != ci->sslkey[0]) {
-        appendPQExpBuffer(&urlbuf, "&sslkey=%s", ci->sslkey);
-    }
-    if ('\0' != ci->sslrootcert[0]) {
-        appendPQExpBuffer(&urlbuf, "&sslrootcert=%s", ci->sslrootcert);
-    }
-    if ('\0' != ci->sslcrl[0]) {
-        appendPQExpBuffer(&urlbuf, "&sslcrl=%s", ci->sslcrl);
-    }
-    if ('\0' != ci->requirepeer[0]) {
-        appendPQExpBuffer(&urlbuf, "&requirepeer=%s", ci->requirepeer);
-    }
-    if ('\0' != ci->krbsrvname[0]) {
-        appendPQExpBuffer(&urlbuf, "&krbsrvname=%s", ci->krbsrvname);
-    }
-    if ('\0' != ci->gsslib[0]) {
-        appendPQExpBuffer(&urlbuf, "&gsslib=%s", ci->gsslib);
-    }
-    if ('\0' != ci->service[0]) {
-        appendPQExpBuffer(&urlbuf, "&service=%s", ci->service);
-    }
-    if ('\0' != ci->remote_nodename[0]) {
-        appendPQExpBuffer(&urlbuf, "&remote_nodename=%s", ci->remote_nodename);
-    }
-    if ('\0' != ci->localhost[0]) {
-        appendPQExpBuffer(&urlbuf, "&localhost=%s", ci->localhost);
-    }
-    if ('\0' != ci->localport[0]) {
-        appendPQExpBuffer(&urlbuf, "&localport=%s", ci->localport);
-    }
-    if ('\0' != ci->replication[0]) {
-        appendPQExpBuffer(&urlbuf, "&replication=%s", ci->replication);
-    }
-    if ('\0' != ci->backend_version[0]) {
-        appendPQExpBuffer(&urlbuf, "&backend_version=%s", ci->backend_version);
-    }
-    if ('\0' != ci->prototype[0]) {
-        appendPQExpBuffer(&urlbuf, "&prototype=%s", ci->prototype);
-    }
-    if ('\0' != ci->enable_ce[0]) {
-        appendPQExpBuffer(&urlbuf, "&enable_ce=%s", ci->enable_ce);
-    }
-
-    if (PQExpBufferDataBroken(urlbuf)) {
-        goto cleanup;
-    }
-    result = strdup(urlbuf.data);
-
-cleanup:
-    if (urlbuf_initialized)
-        termPQExpBuffer(&urlbuf);
-    for (i = 0; i < MAX_PARTS; i++) {
-        if (host_array[i] != NULL) {
-            free(host_array[i]);
-        }
-        if (port_array[i] != NULL) {
-            free(port_array[i]);
-        }
-    }
-    return result;
-}
-static char *
-hide_url_password(const char *url)
-{
-	char	*outurl;
-	const char *sensitive[] = {"password", "sslcert", "sslkey", "sslrootcert", "sslcrl", NULL};
-	int		 i;
-
-	if (!url) {
-		return NULL;
-	}
-	outurl = strdup(url);
-	if (!outurl) {
-		return NULL;
-	}
-
-	for (i = 0; sensitive[i]; i++)
+	for (i = 0; i < MAX_PARTS; i++)
 	{
-		const char *param = sensitive[i];
-		size_t		plen = strlen(param) + 1;	/* include trailing '=' */
-		char	   *p = outurl;
-
-		while ((p = strstr(p, param)) != NULL)
-		{
-			/* mask only proper query parameters: ?param=... or &param=... */
-			if ((p == outurl || p[-1] == '?' || p[-1] == '&') && p[plen - 1] == '=')
-			{
-				char	*v;
-
-				for (v = p + plen; *v && *v != '&'; v++) {
-					*v = 'x';
-				}
-			}
-			p++;
-		}
+		if (host_array[i] != NULL)
+			free(host_array[i]);
+		if (port_array[i] != NULL)
+			free(port_array[i]);
 	}
-	return outurl;
+	return rc;
 }
 
 static int
@@ -3609,10 +3467,10 @@ LIBPQ_connect(ConnectionClass *self)
 	char		keepalive_interval_str[20];
 	char		*errmsg = NULL;
 	char		local_conninfo[8192];
-    int         host_number = 1;
-    int         port_number = 1;
-    char*       URL = NULL;
-	
+	int			host_number = 1;
+	int			port_number = 1;
+	int			host_port_rc;
+
 	MYLOG(0, "connecting to the database using %s as the server and pqopt={%s}\n", self->connInfo.server, SAFE_NAME(ci->pqopt));
 
 	if (NULL == (conninfoOption = PQconninfoParse(SAFE_NAME(ci->pqopt), &errmsg)))
@@ -3626,243 +3484,247 @@ LIBPQ_connect(ConnectionClass *self)
 		CC_set_error(self, CONN_OPENDB_ERROR, emsg, func);
 		goto cleanup;
 	}
-    /* multiple_hostip or multiple_port from DSN */
-    URL = generate_conninfo_URL_by_ConnInfo(ci, &host_number, &port_number);
-    if (!URL) {
-        if (!ci->server || !ci->port) {
-            CC_set_error(self, CONN_INVALID_ARGUMENT_NO, "The server or port should not be empty.", func);
-        } else if (-1 == host_number || -1 == port_number) {
-            CC_set_error(self, CONN_NO_MEMORY_ERROR, "Memory allocation failure when resolving address.", func);
-        } else if ((host_number != port_number) && host_number != 1 && port_number != 1) {
-            CC_set_error(self, CONN_VALUE_OUT_OF_RANGE,
-                         "The number of hosts should be the same as the number of ports when both are multiple.", func);
-        } else {
-            CC_set_error(self, CONN_NO_MEMORY_ERROR,
-                         "Memory allocation failure when Trying to splice strings.", func);
-        }
-    }
-    if (host_number > 1 || port_number > 1) {
-        char	*redacted_url = hide_url_password(URL);
-        MYLOG(0, "connecting to the database using URL: %s\n", redacted_url ? redacted_url : "(NULL)");
-        free(redacted_url);
-        pqconn = PQconnectdb(URL);
-    } else {
-        /* Build arrays of keywords & values, for PQconnectDBParams */
-        cnt = 0;
-        if (ci->server[0]) {
-            opts[cnt] = "host";
-            vals[cnt++] = ci->server;
-        }
-        if (ci->port[0]) {
-            opts[cnt] = "port";
-            vals[cnt++] = ci->port;
-        }
-        if (ci->database[0]) {
-            opts[cnt] = "dbname";
-            vals[cnt++] = ci->database;
-        }
-        if (ci->username[0]) {
-            opts[cnt] = "user";
-            vals[cnt++] = ci->username;
-        }
-        switch (ci->sslmode[0]) {
-            case '\0':
-                break;
-            case SSLLBYTE_VERIFY:
-                opts[cnt] = "sslmode";
-                switch (ci->sslmode[1]) {
-                    case 'f':
-                        vals[cnt++] = SSLMODE_VERIFY_FULL;
-                        break;
-                    case 'c':
-                        vals[cnt++] = SSLMODE_VERIFY_CA;
-                        break;
-                    default:
-                        vals[cnt++] = ci->sslmode;
-                }
-                break;
-            default:
-                opts[cnt] = "sslmode";
-                vals[cnt++] = ci->sslmode;
-        }
-        if (NAME_IS_VALID(ci->password)) {
-            opts[cnt] = "password";
-            vals[cnt++] = SAFE_NAME(ci->password);
-        }
-        if (ci->disable_keepalive) {
-            opts[cnt] = "keepalives";
-                vals[cnt++] = "0";
-        }
-        if (ci->connect_timeout[0]) {
-            opts[cnt] = "connect_timeout";
-            vals[cnt++] = ci->connect_timeout;
-        }
-        if (ci->rw_timeout[0]) {
-            opts[cnt] = "rw_timeout";
-            vals[cnt++] = ci->rw_timeout;
-        }
-        if (ci->keepalive_idle > 0) {
-            ITOA_FIXED(keepalive_idle_str, ci->keepalive_idle);
-            opts[cnt] = "keepalives_idle";
-            vals[cnt++] = keepalive_idle_str;
-        } else if ('\0' != ci->keepalives_idle[0]) {
-            opts[cnt] = "keepalives_idle";
-            vals[cnt++] = ci->keepalives_idle;
-        }
-        if (ci->keepalive_interval > 0) {
-            ITOA_FIXED(keepalive_interval_str, ci->keepalive_interval);
-            opts[cnt] = "keepalives_interval";
-            vals[cnt++] = keepalive_interval_str;
-        } else if ('\0' != ci->keepalives_interval[0]) {
-            opts[cnt] = "keepalives_interval";
-            vals[cnt++] = ci->keepalives_interval;
-        }
-        if ('\0' != ci->keepalives_count[0]) {
-            opts[cnt] = "keepalives_count";
-            vals[cnt++] = ci->keepalives_count;
-        }
-        if ('\0' != ci->client_encoding[0]) {
-            opts[cnt] = "client_encoding";
-            vals[cnt++] = ci->client_encoding;
-        }
-        if ('\0' != ci->application_name[0]) {
-            opts[cnt] = "application_name";
-            vals[cnt++] = ci->application_name;
-        }
-        if ('\0' != ci->tcp_user_timeout[0]) {
-            opts[cnt] = "tcp_user_timeout";
-            vals[cnt++] = ci->tcp_user_timeout;
-        }
-        if ('\0' != ci->sslcompression[0]) {
-            opts[cnt] = "sslcompression";
-            vals[cnt++] = ci->sslcompression;
-        }
-        if ('\0' != ci->sslcert[0]) {
-            opts[cnt] = "sslcert";
-            vals[cnt++] = ci->sslcert;
-        }
-        if ('\0' != ci->sslkey[0]) {
-            opts[cnt] = "sslkey";
-            vals[cnt++] = ci->sslkey;
-        }
-        if ('\0' != ci->sslrootcert[0]) {
-            opts[cnt] = "sslrootcert";
-            vals[cnt++] = ci->sslrootcert;
-        }
-        if ('\0' != ci->sslcrl[0]) {
-            opts[cnt] = "sslcrl";
-            vals[cnt++] = ci->sslcrl;
-        }
-        if ('\0' != ci->requirepeer[0]) {
-            opts[cnt] = "requirepeer";
-            vals[cnt++] = ci->requirepeer;
-        }
-        if ('\0' != ci->krbsrvname[0]) {
-            opts[cnt] = "krbsrvname";
-            vals[cnt++] = ci->krbsrvname;
-        }
-        if ('\0' != ci->gsslib[0]) {
-            opts[cnt] = "gsslib";
-            vals[cnt++] = ci->gsslib;
-        }
-        if ('\0' != ci->service[0]) {
-            opts[cnt] = "service";
-            vals[cnt++] = ci->service;
-        }
-        if ('\0' != ci->remote_nodename[0]) {
-            opts[cnt] = "remote_nodename";
-            vals[cnt++] = ci->remote_nodename;
-        }
-        if ('\0' != ci->localhost[0]) {
-            opts[cnt] = "localhost";
-            vals[cnt++] = ci->localhost;
-        }
-        if ('\0' != ci->localport[0]) {
-            opts[cnt] = "localport";
-            vals[cnt++] = ci->localport;
-        }
-        if ('\0' != ci->replication[0]) {
-            opts[cnt] = "replication";
-            vals[cnt++] = ci->replication;
-        }
-        if ('\0' != ci->backend_version[0]) {
-            opts[cnt] = "backend_version";
-            vals[cnt++] = ci->backend_version;
-        }
-        if ('\0' != ci->prototype[0]) {
-            opts[cnt] = "prototype";
-            vals[cnt++] = ci->prototype;
-        }
-        if ('\0' != ci->enable_ce[0]) {
-            opts[cnt] = "enable_ce";
-            vals[cnt++] = ci->enable_ce;
-        }
-        if ((odbcVersionString != NULL) && (odbcVersionString[0] != '\0')) {
-            if (self->connInfo.connection_extra_info > 0) {
-                char libpath[4096] = {'\0'};
-                char username[128] = {'\0'};
 
-                (void)CC_getLibpath(libpath, sizeof(libpath));
-                (void)CC_getOSUser(username, sizeof(username));
+	host_port_rc = validate_server_port(ci, &host_number, &port_number);
+	if (0 != host_port_rc)
+	{
+		if (-2 == host_port_rc)
+			CC_set_error(self, CONN_INVALID_ARGUMENT_NO, "The server or port should not be empty.", func);
+		else if (-1 == host_port_rc)
+			CC_set_error(self, CONN_NO_MEMORY_ERROR, "Memory allocation failure when resolving address.", func);
+		else
+			CC_set_error(self, CONN_VALUE_OUT_OF_RANGE,
+						 "The number of hosts should be the same as the number of ports when both are multiple.", func);
+		goto cleanup;
+	}
 
-                snprintf(local_conninfo, sizeof(local_conninfo),
-                "{\"driver_name\":\"ODBC\", \"driver_version\":\"%s\", \"driver_path\":\"%s\", \"os_user\":\"%s\"}",
-                odbcVersionString, libpath, username);
-            } else {
-                snprintf(local_conninfo, sizeof(local_conninfo),
-                        "{\"driver_name\":\"ODBC\",\"driver_version\":\"%s\"}",
-                        odbcVersionString);
-            }
-            opts[cnt] = "connection_info";
-            vals[cnt++] = local_conninfo;
-        }
-        if (conninfoOption != NULL) {
-            const char *keyword, *val;
-            int j;
+	/*
+	 * Always use PQconnectdbParams. Multi-host uses comma-separated host/port
+	 * (libpq). Never build a postgres:// URI with an embedded password.
+	 */
+	cnt = 0;
+	if (ci->server[0]) {
+		opts[cnt] = "host";
+		vals[cnt++] = ci->server;
+	}
+	if (ci->port[0]) {
+		opts[cnt] = "port";
+		vals[cnt++] = ci->port;
+	}
+	if (ci->database[0]) {
+		opts[cnt] = "dbname";
+		vals[cnt++] = ci->database;
+	}
+	if (ci->username[0]) {
+		opts[cnt] = "user";
+		vals[cnt++] = ci->username;
+	}
+	if (host_number > 1 || port_number > 1) {
+		opts[cnt] = "target_session_attrs";
+		if ('\0' != ci->target_session_attrs[0])
+			vals[cnt++] = ci->target_session_attrs;
+		else
+			vals[cnt++] = "read-write";
+	} else if ('\0' != ci->target_session_attrs[0]) {
+		opts[cnt] = "target_session_attrs";
+		vals[cnt++] = ci->target_session_attrs;
+	}
+	switch (ci->sslmode[0]) {
+		case '\0':
+			break;
+		case SSLLBYTE_VERIFY:
+			opts[cnt] = "sslmode";
+			switch (ci->sslmode[1]) {
+				case 'f':
+					vals[cnt++] = SSLMODE_VERIFY_FULL;
+					break;
+				case 'c':
+					vals[cnt++] = SSLMODE_VERIFY_CA;
+					break;
+				default:
+					vals[cnt++] = ci->sslmode;
+			}
+			break;
+		default:
+			opts[cnt] = "sslmode";
+			vals[cnt++] = ci->sslmode;
+	}
+	if (NAME_IS_VALID(ci->password)) {
+		opts[cnt] = "password";
+		vals[cnt++] = SAFE_NAME(ci->password);
+	}
+	if (ci->disable_keepalive) {
+		opts[cnt] = "keepalives";
+		vals[cnt++] = "0";
+	}
+	if (ci->connect_timeout[0]) {
+		opts[cnt] = "connect_timeout";
+		vals[cnt++] = ci->connect_timeout;
+	}
+	if (ci->rw_timeout[0]) {
+		opts[cnt] = "rw_timeout";
+		vals[cnt++] = ci->rw_timeout;
+	}
+	if (ci->keepalive_idle > 0) {
+		ITOA_FIXED(keepalive_idle_str, ci->keepalive_idle);
+		opts[cnt] = "keepalives_idle";
+		vals[cnt++] = keepalive_idle_str;
+	} else if ('\0' != ci->keepalives_idle[0]) {
+		opts[cnt] = "keepalives_idle";
+		vals[cnt++] = ci->keepalives_idle;
+	}
+	if (ci->keepalive_interval > 0) {
+		ITOA_FIXED(keepalive_interval_str, ci->keepalive_interval);
+		opts[cnt] = "keepalives_interval";
+		vals[cnt++] = keepalive_interval_str;
+	} else if ('\0' != ci->keepalives_interval[0]) {
+		opts[cnt] = "keepalives_interval";
+		vals[cnt++] = ci->keepalives_interval;
+	}
+	if ('\0' != ci->keepalives_count[0]) {
+		opts[cnt] = "keepalives_count";
+		vals[cnt++] = ci->keepalives_count;
+	}
+	if ('\0' != ci->client_encoding[0]) {
+		opts[cnt] = "client_encoding";
+		vals[cnt++] = ci->client_encoding;
+	}
+	if ('\0' != ci->application_name[0]) {
+		opts[cnt] = "application_name";
+		vals[cnt++] = ci->application_name;
+	}
+	if ('\0' != ci->tcp_user_timeout[0]) {
+		opts[cnt] = "tcp_user_timeout";
+		vals[cnt++] = ci->tcp_user_timeout;
+	}
+	if ('\0' != ci->sslcompression[0]) {
+		opts[cnt] = "sslcompression";
+		vals[cnt++] = ci->sslcompression;
+	}
+	if ('\0' != ci->sslcert[0]) {
+		opts[cnt] = "sslcert";
+		vals[cnt++] = ci->sslcert;
+	}
+	if ('\0' != ci->sslkey[0]) {
+		opts[cnt] = "sslkey";
+		vals[cnt++] = ci->sslkey;
+	}
+	if ('\0' != ci->sslrootcert[0]) {
+		opts[cnt] = "sslrootcert";
+		vals[cnt++] = ci->sslrootcert;
+	}
+	if ('\0' != ci->sslcrl[0]) {
+		opts[cnt] = "sslcrl";
+		vals[cnt++] = ci->sslcrl;
+	}
+	if ('\0' != ci->requirepeer[0]) {
+		opts[cnt] = "requirepeer";
+		vals[cnt++] = ci->requirepeer;
+	}
+	if ('\0' != ci->krbsrvname[0]) {
+		opts[cnt] = "krbsrvname";
+		vals[cnt++] = ci->krbsrvname;
+	}
+	if ('\0' != ci->gsslib[0]) {
+		opts[cnt] = "gsslib";
+		vals[cnt++] = ci->gsslib;
+	}
+	if ('\0' != ci->service[0]) {
+		opts[cnt] = "service";
+		vals[cnt++] = ci->service;
+	}
+	if ('\0' != ci->remote_nodename[0]) {
+		opts[cnt] = "remote_nodename";
+		vals[cnt++] = ci->remote_nodename;
+	}
+	if ('\0' != ci->localhost[0]) {
+		opts[cnt] = "localhost";
+		vals[cnt++] = ci->localhost;
+	}
+	if ('\0' != ci->localport[0]) {
+		opts[cnt] = "localport";
+		vals[cnt++] = ci->localport;
+	}
+	if ('\0' != ci->replication[0]) {
+		opts[cnt] = "replication";
+		vals[cnt++] = ci->replication;
+	}
+	if ('\0' != ci->backend_version[0]) {
+		opts[cnt] = "backend_version";
+		vals[cnt++] = ci->backend_version;
+	}
+	if ('\0' != ci->prototype[0]) {
+		opts[cnt] = "prototype";
+		vals[cnt++] = ci->prototype;
+	}
+	if ('\0' != ci->enable_ce[0]) {
+		opts[cnt] = "enable_ce";
+		vals[cnt++] = ci->enable_ce;
+	}
+	if ((odbcVersionString != NULL) && (odbcVersionString[0] != '\0')) {
+		if (self->connInfo.connection_extra_info > 0) {
+			char libpath[4096] = {'\0'};
+			char username[128] = {'\0'};
 
-            for (i = 0, pqopt = conninfoOption; (keyword = pqopt->keyword) != NULL; i++, pqopt++) {
-                if ((val = pqopt->val) != NULL) {
-                    for (j = 0; j < cnt; j++) {
-                        if (stricmp(opts[j], keyword) == 0) {
-                            char emsg[100];
-                            if (vals[j] != NULL && strcmp(vals[j], val) == 0) {
-                                continue;
-                            }
-                            SPRINTF_FIXED(emsg,
-                                          "%s parameter in pqopt option conflicts with other ordinary option", keyword);
-                            CC_set_error(self, CONN_OPENDB_ERROR, emsg, func);
-                            goto cleanup;
-                        }
-                    }
-                    if (j >= cnt && cnt < PROTOCOL3_OPTS_MAX - 1) {
-                        opts[cnt] = keyword;
-                        vals[cnt++] = val;
-                    }
-                }
-            }
-        }
-        opts[cnt] = vals[cnt] = NULL;
-        /* Ok, we're all set to connect */
+			(void)CC_getLibpath(libpath, sizeof(libpath));
+			(void)CC_getOSUser(username, sizeof(username));
 
-        if (get_qlog() > 0 || get_mylog() > 0) {
-            const char **popt, **pval;
-            QLOG(0, "PQconnectdbParams:");
-            for (popt = opts, pval = vals; *popt; popt++, pval++) {
-                if (stricmp(*popt, "password") == 0) {
-                    QPRINTF(0, " %s='xxxxx'", *popt);
-                } else if (stricmp(*popt, "sslcert") == 0 ||
-                         stricmp(*popt, "sslkey") == 0 ||
-                         stricmp(*popt, "sslrootcert") == 0) {
-                    QPRINTF(0, " %s='xxxx'", *popt);
-                } else {
-                    QPRINTF(0, " %s='%s'", *popt, *pval);
-                }
-            }
-            QPRINTF(0, "\n");
-        }
-        pqconn = PQconnectdbParams(opts, vals, FALSE);
-    }
-    free(URL);
+			snprintf(local_conninfo, sizeof(local_conninfo),
+			"{\"driver_name\":\"ODBC\", \"driver_version\":\"%s\", \"driver_path\":\"%s\", \"os_user\":\"%s\"}",
+			odbcVersionString, libpath, username);
+		} else {
+			snprintf(local_conninfo, sizeof(local_conninfo),
+					"{\"driver_name\":\"ODBC\",\"driver_version\":\"%s\"}",
+					odbcVersionString);
+		}
+		opts[cnt] = "connection_info";
+		vals[cnt++] = local_conninfo;
+	}
+	if (conninfoOption != NULL) {
+		const char *keyword, *val;
+		int j;
+
+		for (i = 0, pqopt = conninfoOption; (keyword = pqopt->keyword) != NULL; i++, pqopt++) {
+			if ((val = pqopt->val) != NULL) {
+				for (j = 0; j < cnt; j++) {
+					if (stricmp(opts[j], keyword) == 0) {
+						char emsg[100];
+						if (vals[j] != NULL && strcmp(vals[j], val) == 0) {
+							continue;
+						}
+						SPRINTF_FIXED(emsg,
+									  "%s parameter in pqopt option conflicts with other ordinary option", keyword);
+						CC_set_error(self, CONN_OPENDB_ERROR, emsg, func);
+						goto cleanup;
+					}
+				}
+				if (j >= cnt && cnt < PROTOCOL3_OPTS_MAX - 1) {
+					opts[cnt] = keyword;
+					vals[cnt++] = val;
+				}
+			}
+		}
+	}
+	opts[cnt] = vals[cnt] = NULL;
+
+	if (get_qlog() > 0 || get_mylog() > 0) {
+		const char **popt, **pval;
+		QLOG(0, "PQconnectdbParams:");
+		for (popt = opts, pval = vals; *popt; popt++, pval++) {
+			if (stricmp(*popt, "password") == 0) {
+				QPRINTF(0, " %s='xxxxx'", *popt);
+			} else if (stricmp(*popt, "sslcert") == 0 ||
+					 stricmp(*popt, "sslkey") == 0 ||
+					 stricmp(*popt, "sslrootcert") == 0 ||
+					 stricmp(*popt, "sslcrl") == 0) {
+				QPRINTF(0, " %s='xxxx'", *popt);
+			} else {
+				QPRINTF(0, " %s='%s'", *popt, *pval);
+			}
+		}
+		QPRINTF(0, "\n");
+	}
+	pqconn = PQconnectdbParams(opts, vals, FALSE);
 
 	if (!pqconn)
 	{
@@ -3900,7 +3762,7 @@ MYLOG(DETAIL_LOG_LEVEL, "status=%d\n", pqret);
 	if (PQpass(pqconn) && strlen(PQpass(pqconn)))
 	{
 		char *pwd = PQpass(pqconn);
-		memset(pwd, 0, strlen(pwd));
+		secure_zeromem(pwd, strlen(pwd));
 	}
 
 	MYLOG(0, "libpq connection to the database established.(IP: %s)\n", PQhost(pqconn));

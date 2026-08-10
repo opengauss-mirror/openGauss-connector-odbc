@@ -43,6 +43,9 @@
  * Coverage note:
  *   - Vulnerability #9 (SQLConnectW length validation in win_unicode.c) is
  *     exercised only on Windows builds; the test is compiled out on Linux.
+ *   - Password-memory hardening: multi-host uses PQconnectdbParams (no URI
+ *     with embedded password); password wipe must leave the live connection
+ *     usable; MYLOG must not print plaintext passwords or the old URL path.
  */
 
 static void
@@ -618,6 +621,342 @@ check_log_redaction(const char *password,
 	return found_plain ? 1 : 0;
 }
 
+/*
+ * Resolve server/port used by DRIVER-based connect strings (same defaults as
+ * build_connect_string).
+ */
+static void
+get_default_server_port(const char **server, const char **port)
+{
+	*server = getenv("ODBC_SERVER");
+	*port = getenv("ODBC_PORT");
+	if (!*server || !(*server)[0])
+		*server = "127.0.0.1";
+	if (!*port || !(*port)[0])
+		*port = "5432";
+}
+
+/*
+ * After password-memory hardening, multi-host must use PQconnectdbParams (not
+ * a postgres:// URI with embedded password). Verify connect + simple query.
+ */
+static void
+test_multi_host_params_connect(void)
+{
+	SQLRETURN rc;
+	SQLHDBC hdbc = SQL_NULL_HDBC;
+	SQLHSTMT hstmt = SQL_NULL_HSTMT;
+	SQLCHAR str[1024];
+	SQLSMALLINT strl;
+	SQLINTEGER one = 0;
+	char dsn[4096];
+	char extra[512];
+	const char *server;
+	const char *port;
+
+	get_default_server_port(&server, &port);
+
+	rc = SQLAllocHandle(SQL_HANDLE_DBC, env, &hdbc);
+	if (!SQL_SUCCEEDED(rc))
+	{
+		print_diag("SQLAllocHandle(DBC) failed", SQL_HANDLE_ENV, env);
+		exit(1);
+	}
+
+	/*
+	 * Duplicate the same host/port so libpq still has a multi-host list while
+	 * a single reachable node is enough for the test environment.
+	 */
+	snprintf(extra, sizeof(extra),
+			 "SERVER=%s,%s;PORT=%s,%s;target_session_attrs=any",
+			 server, server, port, port);
+	build_connect_string(dsn, sizeof(dsn), extra);
+
+	rc = SQLDriverConnect(hdbc, NULL, (SQLCHAR *) dsn, SQL_NTS,
+						  str, sizeof(str), &strl, SQL_DRIVER_COMPLETE);
+	if (!SQL_SUCCEEDED(rc))
+	{
+		print_diag("FAIL: multi-host SQLDriverConnect failed", SQL_HANDLE_DBC, hdbc);
+		SQLFreeConnect(hdbc);
+		exit(1);
+	}
+
+	rc = SQLAllocHandle(SQL_HANDLE_STMT, hdbc, &hstmt);
+	if (!SQL_SUCCEEDED(rc))
+	{
+		print_diag("FAIL: SQLAllocHandle(STMT) failed", SQL_HANDLE_DBC, hdbc);
+		SQLDisconnect(hdbc);
+		SQLFreeConnect(hdbc);
+		exit(1);
+	}
+
+	rc = SQLExecDirect(hstmt, (SQLCHAR *) "SELECT 1", SQL_NTS);
+	if (!SQL_SUCCEEDED(rc))
+	{
+		print_diag("FAIL: SELECT 1 after multi-host connect failed", SQL_HANDLE_STMT, hstmt);
+		SQLFreeHandle(SQL_HANDLE_STMT, hstmt);
+		SQLDisconnect(hdbc);
+		SQLFreeConnect(hdbc);
+		exit(1);
+	}
+
+	rc = SQLFetch(hstmt);
+	if (!SQL_SUCCEEDED(rc))
+	{
+		print_diag("FAIL: SQLFetch after multi-host connect failed", SQL_HANDLE_STMT, hstmt);
+		SQLFreeHandle(SQL_HANDLE_STMT, hstmt);
+		SQLDisconnect(hdbc);
+		SQLFreeConnect(hdbc);
+		exit(1);
+	}
+
+	rc = SQLGetData(hstmt, 1, SQL_C_SLONG, &one, sizeof(one), NULL);
+	if (!SQL_SUCCEEDED(rc) || one != 1)
+	{
+		fprintf(stderr, "FAIL: expected SELECT 1 => 1, got %d (rc=%d)\n", (int) one, (int) rc);
+		SQLFreeHandle(SQL_HANDLE_STMT, hstmt);
+		SQLDisconnect(hdbc);
+		SQLFreeConnect(hdbc);
+		exit(1);
+	}
+
+	printf("OK: multi-host Params connect works (SELECT 1)\n");
+
+	SQLFreeHandle(SQL_HANDLE_STMT, hstmt);
+	SQLDisconnect(hdbc);
+	SQLFreeConnect(hdbc);
+}
+
+/*
+ * Host/port list length mismatch must be rejected by validate_server_port.
+ */
+static void
+test_multi_host_port_mismatch(void)
+{
+	SQLRETURN rc;
+	SQLHDBC hdbc = SQL_NULL_HDBC;
+	SQLCHAR str[1024];
+	SQLSMALLINT strl;
+	char dsn[4096];
+	char extra[512];
+	const char *server;
+	const char *port;
+
+	get_default_server_port(&server, &port);
+
+	rc = SQLAllocHandle(SQL_HANDLE_DBC, env, &hdbc);
+	if (!SQL_SUCCEEDED(rc))
+	{
+		print_diag("SQLAllocHandle(DBC) failed", SQL_HANDLE_ENV, env);
+		exit(1);
+	}
+
+	/* Two hosts, one port that is not a single shared port — invalid. */
+	snprintf(extra, sizeof(extra),
+			 "SERVER=%s,%s;PORT=%s,%s,9999",
+			 server, server, port, port);
+	build_connect_string(dsn, sizeof(dsn), extra);
+
+	rc = SQLDriverConnect(hdbc, NULL, (SQLCHAR *) dsn, SQL_NTS,
+						  str, sizeof(str), &strl, SQL_DRIVER_COMPLETE);
+	if (SQL_SUCCEEDED(rc))
+	{
+		fprintf(stderr, "FAIL: mismatched host/port counts should fail, but connect succeeded\n");
+		SQLDisconnect(hdbc);
+		SQLFreeConnect(hdbc);
+		exit(1);
+	}
+
+	printf("OK: mismatched multi-host/port counts rejected\n");
+	SQLFreeConnect(hdbc);
+}
+
+/*
+ * Confirm MYLOG uses PQconnectdbParams (masked password) and never logs a
+ * postgres:// URI that embeds password=.
+ */
+static int
+check_params_path_logging(const char *password)
+{
+	char filename[PATH_MAX];
+	char line[8192];
+	const char *username;
+	pid_t pid = getpid();
+	FILE *fp;
+	int found_params = 0;
+	int found_url_path = 0;
+	int found_plain = 0;
+	int found_pwd_masked = 0;
+
+	username = getenv("USER");
+	if (!username)
+		username = getenv("LOGNAME");
+	if (!username)
+		username = "unknown";
+
+	snprintf(filename, sizeof(filename),
+			 "/tmp/mylog_security-fix-test_%s%u.log", username, (unsigned) pid);
+
+	fp = fopen(filename, "r");
+	if (!fp)
+	{
+		fprintf(stderr,
+				"FAIL: could not open MYLOG file %s for Params-path check\n",
+				filename);
+		return 1;
+	}
+
+	while (fgets(line, sizeof(line), fp))
+	{
+		if (password && strstr(line, password))
+		{
+			fprintf(stderr, "FAIL: MYLOG contains plaintext password: %s\n", line);
+			found_plain = 1;
+		}
+		if (strstr(line, "PQconnectdbParams:"))
+			found_params = 1;
+		if (strstr(line, "connecting to the database using URL:"))
+		{
+			fprintf(stderr, "FAIL: obsolete URL connect path still logged: %s\n", line);
+			found_url_path = 1;
+		}
+		if (strstr(line, "password='xxxxx'") || strstr(line, "password=xxxxx"))
+			found_pwd_masked = 1;
+	}
+	fclose(fp);
+
+	if (!found_params)
+	{
+		fprintf(stderr, "FAIL: MYLOG missing PQconnectdbParams line\n");
+		return 1;
+	}
+	if (found_url_path || found_plain)
+		return 1;
+	if (found_pwd_masked)
+		printf("OK: Params-path MYLOG masks password\n");
+	printf("OK: multi-host uses PQconnectdbParams (no URL password path)\n");
+	return 0;
+}
+
+static void
+test_multi_host_params_logging(void)
+{
+	SQLRETURN rc;
+	SQLHDBC hdbc = SQL_NULL_HDBC;
+	SQLCHAR str[1024];
+	SQLSMALLINT strl;
+	const char *password = "Gauss@123";
+	char dsn[4096];
+	char extra[512];
+	const char *server;
+	const char *port;
+
+	get_default_server_port(&server, &port);
+
+	rc = SQLAllocHandle(SQL_HANDLE_DBC, env, &hdbc);
+	if (!SQL_SUCCEEDED(rc))
+	{
+		print_diag("SQLAllocHandle(DBC) failed", SQL_HANDLE_ENV, env);
+		exit(1);
+	}
+
+	snprintf(extra, sizeof(extra),
+			 "SERVER=%s,%s;PORT=%s,%s;Debug=1;target_session_attrs=any",
+			 server, server, port, port);
+	build_connect_string(dsn, sizeof(dsn), extra);
+
+	rc = SQLDriverConnect(hdbc, NULL, (SQLCHAR *) dsn, SQL_NTS,
+						  str, sizeof(str), &strl, SQL_DRIVER_COMPLETE);
+	if (SQL_SUCCEEDED(rc))
+		SQLDisconnect(hdbc);
+	SQLFreeConnect(hdbc);
+
+	if (check_params_path_logging(password) != 0)
+		exit(1);
+}
+
+/*
+ * SQLConnect path: auth succeeds and the connection remains usable after the
+ * driver clears ci->password (wipe must not break the live PGconn).
+ */
+static void
+test_sqlconnect_usable_after_password_wipe(void)
+{
+	SQLRETURN rc;
+	SQLHDBC hdbc = SQL_NULL_HDBC;
+	SQLHSTMT hstmt = SQL_NULL_HSTMT;
+	SQLINTEGER one = 0;
+	const char *server;
+	const char *port;
+	const char *database;
+
+	get_default_server_port(&server, &port);
+	database = getenv("ODBC_DATABASE");
+	if (!database || !database[0])
+		database = "postgres";
+
+	rc = SQLAllocHandle(SQL_HANDLE_DBC, env, &hdbc);
+	if (!SQL_SUCCEEDED(rc))
+	{
+		print_diag("SQLAllocHandle(DBC) failed", SQL_HANDLE_ENV, env);
+		exit(1);
+	}
+
+	/*
+	 * Prefer DSN=gaussdb when ODBC_DRIVER is unset (matches other tests).
+	 * With ODBC_DRIVER set, use DRIVER=... DriverConnect instead.
+	 */
+	if (getenv("ODBC_DRIVER") && getenv("ODBC_DRIVER")[0])
+	{
+		SQLCHAR out[1024];
+		SQLSMALLINT outlen;
+		char connstr[1024];
+
+		snprintf(connstr, sizeof(connstr),
+				 "DRIVER=%s;SERVER=%s;PORT=%s;DATABASE=%s;UID=odbc;PWD=Gauss@123",
+				 getenv("ODBC_DRIVER"), server, port, database);
+		rc = SQLDriverConnect(hdbc, NULL, (SQLCHAR *) connstr, SQL_NTS,
+							  out, sizeof(out), &outlen, SQL_DRIVER_COMPLETE);
+	}
+	else
+	{
+		rc = SQLConnect(hdbc,
+						(SQLCHAR *) "gaussdb", SQL_NTS,
+						(SQLCHAR *) "odbc", SQL_NTS,
+						(SQLCHAR *) "Gauss@123", SQL_NTS);
+	}
+
+	if (!SQL_SUCCEEDED(rc))
+	{
+		print_diag("FAIL: connect for password-wipe usability test failed",
+				   SQL_HANDLE_DBC, hdbc);
+		SQLFreeConnect(hdbc);
+		exit(1);
+	}
+
+	rc = SQLAllocHandle(SQL_HANDLE_STMT, hdbc, &hstmt);
+	CHECK_STMT_RESULT(rc, "SQLAllocHandle(STMT) failed", hstmt);
+
+	rc = SQLExecDirect(hstmt, (SQLCHAR *) "SELECT 1", SQL_NTS);
+	CHECK_STMT_RESULT(rc, "SELECT 1 failed after password wipe", hstmt);
+
+	rc = SQLFetch(hstmt);
+	CHECK_STMT_RESULT(rc, "SQLFetch failed after password wipe", hstmt);
+
+	rc = SQLGetData(hstmt, 1, SQL_C_SLONG, &one, sizeof(one), NULL);
+	if (!SQL_SUCCEEDED(rc) || one != 1)
+	{
+		fprintf(stderr, "FAIL: expected 1 after password wipe, got %d\n", (int) one);
+		exit(1);
+	}
+
+	printf("OK: connection usable after driver password wipe\n");
+
+	SQLFreeHandle(SQL_HANDLE_STMT, hstmt);
+	SQLDisconnect(hdbc);
+	SQLFreeConnect(hdbc);
+}
+
 static void
 test_log_password_redaction(void)
 {
@@ -640,10 +979,9 @@ test_log_password_redaction(void)
 	}
 
 	/*
-	 * Use multiple hosts/ports so the driver takes the URL-logging path in
-	 * connection.c. The URL contains password and SSL file paths; all of them
-	 * must be masked in MYLOG even if the connection itself fails. Enable
-	 * Debug=1 so the MYLOG file is produced for this process.
+	 * Multi-host connect uses PQconnectdbParams (host/port lists). Password
+	 * and SSL file paths must be masked in MYLOG even if the connection fails.
+	 * Enable Debug=1 so the MYLOG file is produced for this process.
 	 */
 	snprintf(extra, sizeof(extra),
 			 "SERVER=127.0.0.1,127.0.0.1;PORT=5432,5432;Debug=1;"
@@ -755,6 +1093,10 @@ int main(int argc, char **argv)
 	test_long_sslcert_path();
 	test_default_ssl_prefer();
 	test_log_password_redaction();
+	test_multi_host_params_connect();
+	test_multi_host_port_mismatch();
+	test_multi_host_params_logging();
+	test_sqlconnect_usable_after_password_wipe();
 
 #ifdef WIN32
 	test_sqlconnectw_invalid_length();

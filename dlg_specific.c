@@ -1954,9 +1954,24 @@ signed char	ci_updatable_cursors_set(ConnInfo *ci)
 }
 
 void
+CC_clear_password(ConnInfo *conninfo)
+{
+	if (conninfo == NULL)
+		return;
+	if (NAME_IS_VALID(conninfo->password))
+	{
+		size_t	n = strlen(conninfo->password.name);
+
+		secure_zeromem(conninfo->password.name, n + 1);
+		free(conninfo->password.name);
+		conninfo->password.name = NULL;
+	}
+}
+
+void
 CC_conninfo_release(ConnInfo *conninfo)
 {
-	NULL_THE_NAME(conninfo->password);
+	CC_clear_password(conninfo);
 	NULL_THE_NAME(conninfo->conn_settings);
 	NULL_THE_NAME(conninfo->pqopt);
 	finalize_globals(&conninfo->drivers);
