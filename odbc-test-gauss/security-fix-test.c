@@ -46,6 +46,8 @@
  *   - Password-memory hardening: multi-host uses PQconnectdbParams (no URI
  *     with embedded password); password wipe must leave the live connection
  *     usable; MYLOG must not print plaintext passwords or the old URL path.
+ *   - TranslationDLL (Windows): relative / non-whitelisted paths must not be
+ *     LoadLibrary'd. Covered by test_translation_dll_* (WIN32 only).
  */
 
 static void
@@ -957,6 +959,210 @@ test_sqlconnect_usable_after_password_wipe(void)
 	SQLFreeConnect(hdbc);
 }
 
+#ifdef WIN32
+/*
+ * Helper: DriverConnect with an extra TranslationDLL=... attribute.
+ */
+static SQLRETURN
+driver_connect_with_translation_dll(SQLHDBC hdbc, const char *translation_dll,
+									SQLCHAR *out, SQLSMALLINT outmax,
+									SQLSMALLINT *outlen)
+{
+	char dsn[4096];
+	char extra[1024];
+
+	snprintf(extra, sizeof(extra), "TranslationDLL=%s", translation_dll);
+	build_connect_string(dsn, sizeof(dsn), extra);
+	return SQLDriverConnect(hdbc, NULL, (SQLCHAR *) dsn, SQL_NTS,
+							out, outmax, outlen, SQL_DRIVER_COMPLETE);
+}
+
+/*
+ * Relative / bare DLL names must be rejected (DLL search-order hijack).
+ */
+static void
+test_translation_dll_rejects_relative_path(void)
+{
+	SQLRETURN rc;
+	SQLHDBC hdbc = SQL_NULL_HDBC;
+	SQLCHAR str[1024];
+	SQLSMALLINT strl;
+
+	rc = SQLAllocHandle(SQL_HANDLE_DBC, env, &hdbc);
+	if (!SQL_SUCCEEDED(rc))
+	{
+		print_diag("SQLAllocHandle(DBC) failed", SQL_HANDLE_ENV, env);
+		exit(1);
+	}
+
+	rc = driver_connect_with_translation_dll(hdbc, "evil.dll", str, sizeof(str), &strl);
+	if (SQL_SUCCEEDED(rc))
+	{
+		fprintf(stderr, "FAIL: TranslationDLL=evil.dll should be rejected\n");
+		SQLDisconnect(hdbc);
+		SQLFreeConnect(hdbc);
+		exit(1);
+	}
+	printf("OK: TranslationDLL relative name rejected\n");
+
+	rc = driver_connect_with_translation_dll(hdbc, ".\\evil.dll", str, sizeof(str), &strl);
+	if (SQL_SUCCEEDED(rc))
+	{
+		fprintf(stderr, "FAIL: TranslationDLL=.\\evil.dll should be rejected\n");
+		SQLDisconnect(hdbc);
+		SQLFreeConnect(hdbc);
+		exit(1);
+	}
+	printf("OK: TranslationDLL .\\relative path rejected\n");
+
+	rc = driver_connect_with_translation_dll(hdbc, "..\\evil.dll", str, sizeof(str), &strl);
+	if (SQL_SUCCEEDED(rc))
+	{
+		fprintf(stderr, "FAIL: TranslationDLL=..\\evil.dll should be rejected\n");
+		SQLDisconnect(hdbc);
+		SQLFreeConnect(hdbc);
+		exit(1);
+	}
+	printf("OK: TranslationDLL ..\\ path rejected\n");
+
+	SQLFreeConnect(hdbc);
+}
+
+/*
+ * Absolute path outside System32 / SysWOW64 / driver dir must be rejected.
+ */
+static void
+test_translation_dll_rejects_non_whitelisted_path(void)
+{
+	SQLRETURN rc;
+	SQLHDBC hdbc = SQL_NULL_HDBC;
+	SQLCHAR str[1024];
+	SQLSMALLINT strl;
+	char tmppath[MAX_PATH];
+	char evilpath[MAX_PATH];
+	DWORD n;
+
+	n = GetTempPath(sizeof(tmppath), tmppath);
+	if (n == 0 || n >= sizeof(tmppath))
+	{
+		fprintf(stderr, "FAIL: GetTempPath failed\n");
+		exit(1);
+	}
+
+	snprintf(evilpath, sizeof(evilpath), "%sevil_odbc_translate.dll", tmppath);
+
+	rc = SQLAllocHandle(SQL_HANDLE_DBC, env, &hdbc);
+	if (!SQL_SUCCEEDED(rc))
+	{
+		print_diag("SQLAllocHandle(DBC) failed", SQL_HANDLE_ENV, env);
+		exit(1);
+	}
+
+	rc = driver_connect_with_translation_dll(hdbc, evilpath, str, sizeof(str), &strl);
+	if (SQL_SUCCEEDED(rc))
+	{
+		fprintf(stderr,
+				"FAIL: TranslationDLL outside whitelist should be rejected: %s\n",
+				evilpath);
+		SQLDisconnect(hdbc);
+		SQLFreeConnect(hdbc);
+		exit(1);
+	}
+	printf("OK: TranslationDLL absolute non-whitelist path rejected\n");
+
+	snprintf(evilpath, sizeof(evilpath), "%sevil_odbc_translate.txt", tmppath);
+	rc = driver_connect_with_translation_dll(hdbc, evilpath, str, sizeof(str), &strl);
+	if (SQL_SUCCEEDED(rc))
+	{
+		fprintf(stderr, "FAIL: TranslationDLL without .dll suffix should be rejected\n");
+		SQLDisconnect(hdbc);
+		SQLFreeConnect(hdbc);
+		exit(1);
+	}
+	printf("OK: TranslationDLL non-.dll extension rejected\n");
+
+	SQLFreeConnect(hdbc);
+}
+
+/*
+ * Path traversal that escapes whitelist after GetFullPathName must be rejected.
+ */
+static void
+test_translation_dll_rejects_path_traversal(void)
+{
+	SQLRETURN rc;
+	SQLHDBC hdbc = SQL_NULL_HDBC;
+	SQLCHAR str[1024];
+	SQLSMALLINT strl;
+	char sysdir[MAX_PATH];
+	char evilpath[MAX_PATH];
+
+	if (GetSystemDirectory(sysdir, sizeof(sysdir)) == 0)
+	{
+		fprintf(stderr, "FAIL: GetSystemDirectory failed\n");
+		exit(1);
+	}
+
+	snprintf(evilpath, sizeof(evilpath),
+			 "%s\\..\\Temp\\evil_odbc_translate.dll", sysdir);
+
+	rc = SQLAllocHandle(SQL_HANDLE_DBC, env, &hdbc);
+	if (!SQL_SUCCEEDED(rc))
+	{
+		print_diag("SQLAllocHandle(DBC) failed", SQL_HANDLE_ENV, env);
+		exit(1);
+	}
+
+	rc = driver_connect_with_translation_dll(hdbc, evilpath, str, sizeof(str), &strl);
+	if (SQL_SUCCEEDED(rc))
+	{
+		fprintf(stderr,
+				"FAIL: TranslationDLL path traversal should be rejected: %s\n",
+				evilpath);
+		SQLDisconnect(hdbc);
+		SQLFreeConnect(hdbc);
+		exit(1);
+	}
+	printf("OK: TranslationDLL path traversal outside whitelist rejected\n");
+
+	SQLFreeConnect(hdbc);
+}
+
+/*
+ * Omitting TranslationDLL must still allow a normal connection.
+ */
+static void
+test_translation_dll_absent_connect_ok(void)
+{
+	SQLRETURN rc;
+	SQLHDBC hdbc = SQL_NULL_HDBC;
+	SQLCHAR str[1024];
+	SQLSMALLINT strl;
+	char dsn[1024];
+
+	rc = SQLAllocHandle(SQL_HANDLE_DBC, env, &hdbc);
+	if (!SQL_SUCCEEDED(rc))
+	{
+		print_diag("SQLAllocHandle(DBC) failed", SQL_HANDLE_ENV, env);
+		exit(1);
+	}
+
+	build_connect_string(dsn, sizeof(dsn), NULL);
+	rc = SQLDriverConnect(hdbc, NULL, (SQLCHAR *) dsn, SQL_NTS,
+						  str, sizeof(str), &strl, SQL_DRIVER_COMPLETE);
+	if (!SQL_SUCCEEDED(rc))
+	{
+		print_diag("FAIL: connect without TranslationDLL failed", SQL_HANDLE_DBC, hdbc);
+		SQLFreeConnect(hdbc);
+		exit(1);
+	}
+
+	printf("OK: connect without TranslationDLL succeeds\n");
+	SQLDisconnect(hdbc);
+	SQLFreeConnect(hdbc);
+}
+#endif /* WIN32 */
+
 static void
 test_log_password_redaction(void)
 {
@@ -1100,6 +1306,10 @@ int main(int argc, char **argv)
 
 #ifdef WIN32
 	test_sqlconnectw_invalid_length();
+	test_translation_dll_rejects_relative_path();
+	test_translation_dll_rejects_non_whitelisted_path();
+	test_translation_dll_rejects_path_traversal();
+	test_translation_dll_absent_connect_ok();
 #endif
 
 	test_free_env();

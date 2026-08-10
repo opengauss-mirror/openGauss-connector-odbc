@@ -108,6 +108,7 @@ CnEntry pgxc_entry;
 static int LIBPQ_connect(ConnectionClass *self);
 int split_host_or_port_with_limit(const char *str, char *result_array[MAX_PARTS], int* total_length);
 static int validate_server_port(ConnInfo *ci, int *host_number, int *port_number);
+static void CC_getLibpath(char *libpath, int libpathLen);
 
 static BOOL
 cn_entry_contains(const CnEntry *entry, const char *host, const char *port)
@@ -1263,24 +1264,216 @@ CC_cleanup(ConnectionClass *self, BOOL keepCommunication)
 }
 
 
+#ifdef WIN32
+/*
+ * Return TRUE if abs_file is under abs_dir (after removing trailing separators
+ * from abs_dir). Comparison is case-insensitive.
+ */
+static BOOL
+path_is_under_directory(const char *abs_file, const char *abs_dir)
+{
+	char		dirbuf[MAX_PATH];
+	size_t		dirlen;
+
+	if (!abs_file || !abs_dir || !abs_file[0] || !abs_dir[0])
+		return FALSE;
+
+	STRCPY_FIXED(dirbuf, abs_dir);
+	dirlen = strlen(dirbuf);
+	while (dirlen > 0 && (dirbuf[dirlen - 1] == '\\' || dirbuf[dirlen - 1] == '/'))
+	{
+		dirbuf[--dirlen] = '\0';
+	}
+	if (dirlen == 0)
+		return FALSE;
+
+	if (strnicmp(abs_file, dirbuf, dirlen) != 0)
+		return FALSE;
+	return abs_file[dirlen] == '\\' || abs_file[dirlen] == '/';
+}
+
+static BOOL
+is_windows_absolute_path(const char *path)
+{
+	if (!path || !path[0])
+		return FALSE;
+	/* UNC: \\server\share\... */
+	if (path[0] == '\\' && path[1] == '\\')
+		return TRUE;
+	/* Drive: C:\... */
+	if (((path[0] >= 'A' && path[0] <= 'Z') || (path[0] >= 'a' && path[0] <= 'z')) &&
+		path[1] == ':' && (path[2] == '\\' || path[2] == '/'))
+		return TRUE;
+	return FALSE;
+}
+
+static BOOL
+has_dll_extension(const char *path)
+{
+	size_t	len;
+
+	if (!path)
+		return FALSE;
+	len = strlen(path);
+	if (len < 4)
+		return FALSE;
+	return stricmp(path + len - 4, ".dll") == 0;
+}
+
+/*
+ * Validate TranslationDLL: absolute path, .dll suffix, and located under
+ * System32, SysWOW64, or the ODBC driver directory. On success, writes the
+ * canonical full path into out_path.
+ */
+static BOOL
+CC_validate_translation_dll_path(const char *dll_path, char *out_path, size_t out_len)
+{
+	char		canonical[MAX_PATH];
+	char		sysdir[MAX_PATH];
+	char		wow64dir[MAX_PATH];
+	char		driver_dir[MAX_PATH];
+	char	   *filepart = NULL;
+	DWORD		n;
+	BOOL		allowed = FALSE;
+
+	if (!dll_path || !dll_path[0] || !out_path || out_len < 2)
+		return FALSE;
+
+	if (!is_windows_absolute_path(dll_path))
+	{
+		MYLOG(0, "translation DLL rejected (not absolute): %s\n", dll_path);
+		return FALSE;
+	}
+
+	if (!has_dll_extension(dll_path))
+	{
+		MYLOG(0, "translation DLL rejected (not .dll): %s\n", dll_path);
+		return FALSE;
+	}
+
+	n = GetFullPathName(dll_path, sizeof(canonical), canonical, &filepart);
+	if (n == 0 || n >= sizeof(canonical) || filepart == NULL)
+	{
+		MYLOG(0, "translation DLL rejected (GetFullPathName failed): %s\n", dll_path);
+		return FALSE;
+	}
+
+	/* Reject if normalization escaped (e.g. unexpected relative residue). */
+	if (!is_windows_absolute_path(canonical))
+		return FALSE;
+
+	if (GetSystemDirectory(sysdir, sizeof(sysdir)) > 0 &&
+		path_is_under_directory(canonical, sysdir))
+		allowed = TRUE;
+
+	if (!allowed)
+	{
+		/*
+		 * Allow SysWOW64 without requiring GetSystemWow64Directory (may be
+		 * unavailable on older SDKs / _WIN32_WINNT).
+		 */
+		if (GetWindowsDirectory(wow64dir, sizeof(wow64dir)) > 0)
+		{
+			size_t	wlen = strlen(wow64dir);
+
+			if (wlen > 0 && wlen + 9 < sizeof(wow64dir))
+			{
+				if (wow64dir[wlen - 1] != '\\' && wow64dir[wlen - 1] != '/')
+					STRCAT_FIXED(wow64dir, "\\");
+				STRCAT_FIXED(wow64dir, "SysWOW64");
+				if (path_is_under_directory(canonical, wow64dir))
+					allowed = TRUE;
+			}
+		}
+	}
+
+	if (!allowed)
+	{
+		char	driver_path[MAX_PATH];
+
+		driver_path[0] = '\0';
+		CC_getLibpath(driver_path, sizeof(driver_path));
+		if (driver_path[0])
+		{
+			char	   *slash;
+
+			STRCPY_FIXED(driver_dir, driver_path);
+			slash = strrchr(driver_dir, '\\');
+			if (!slash)
+				slash = strrchr(driver_dir, '/');
+			if (slash)
+			{
+				*slash = '\0';
+				if (path_is_under_directory(canonical, driver_dir))
+					allowed = TRUE;
+			}
+		}
+	}
+
+	if (!allowed)
+	{
+		MYLOG(0, "translation DLL rejected (not in whitelist dirs): %s\n", canonical);
+		return FALSE;
+	}
+
+	if (strlen(canonical) >= out_len)
+		return FALSE;
+	strncpy_null(out_path, canonical, out_len);
+	return TRUE;
+}
+#endif /* WIN32 */
+
 int
 CC_set_translation(ConnectionClass *self)
 {
 
 #ifdef WIN32
 	CSTR	func = "CC_set_translation";
+	char	canonical[MAX_PATH];
+	DWORD	load_flags;
 
 	if (self->translation_handle != NULL)
 	{
 		FreeLibrary(self->translation_handle);
 		self->translation_handle = NULL;
 	}
+	self->DataSourceToDriver = NULL;
+	self->DriverToDataSource = NULL;
 
 	if (self->connInfo.translation_dll[0] == 0)
 		return TRUE;
 
+	/*
+	 * translation_dll comes from ConnInfo (DSN / odbc.ini). Loading an
+	 * untrusted relative name via LoadLibrary() enables DLL hijacking.
+	 * Require a canonical absolute path under an allowed directory, then
+	 * load with LoadLibraryEx search flags.
+	 */
+	if (!CC_validate_translation_dll_path(self->connInfo.translation_dll,
+										  canonical, sizeof(canonical)))
+	{
+		CC_set_error(self, CONN_UNABLE_TO_LOAD_DLL,
+					 "Translation DLL path is not allowed. Use an absolute path under System32, SysWOW64, or the driver directory.",
+					 func);
+		return FALSE;
+	}
+
 	self->translation_option = atoi(self->connInfo.translation_option);
-	self->translation_handle = LoadLibrary(self->connInfo.translation_dll);
+
+#ifndef LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR
+#define LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR 0x00000100
+#endif
+#ifndef LOAD_LIBRARY_SEARCH_SYSTEM32
+#define LOAD_LIBRARY_SEARCH_SYSTEM32 0x00000800
+#endif
+	load_flags = LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR | LOAD_LIBRARY_SEARCH_SYSTEM32;
+	self->translation_handle = LoadLibraryEx(canonical, NULL, load_flags);
+	if (self->translation_handle == NULL)
+	{
+		/* Older Windows without KB2533623: absolute path + altered search. */
+		self->translation_handle = LoadLibraryEx(canonical, NULL,
+												 LOAD_WITH_ALTERED_SEARCH_PATH);
+	}
 
 	if (self->translation_handle == NULL)
 	{
@@ -1299,6 +1492,10 @@ CC_set_translation(ConnectionClass *self)
 	if (self->DataSourceToDriver == NULL || self->DriverToDataSource == NULL)
 	{
 		CC_set_error(self, CONN_UNABLE_TO_LOAD_DLL, "Could not find translation DLL functions.", func);
+		FreeLibrary(self->translation_handle);
+		self->translation_handle = NULL;
+		self->DataSourceToDriver = NULL;
+		self->DriverToDataSource = NULL;
 		return FALSE;
 	}
 #endif
@@ -1668,7 +1865,18 @@ CC_connect(ConnectionClass *self, char *salt_para)
 	if (ret <= 0)
 		return ret;
 
-	CC_set_translation(self);
+	if (!CC_set_translation(self))
+	{
+		/* Error already set; tear down the just-opened libpq connection. */
+		if (self->pqconn)
+		{
+			QLOG(0, "PQfinish: %p\n", self->pqconn);
+			PQfinish(self->pqconn);
+			self->pqconn = NULL;
+		}
+		self->status = CONN_DOWN;
+		return 0;
+	}
 
 	/*
 	 * Send any initial settings

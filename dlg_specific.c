@@ -654,6 +654,10 @@ copyConnAttributes(ConnInfo *ci, const char *attribute, char *value)
 	{
 		ci->pqopt = decode_or_remove_braces(value);
 	}
+	else if (stricmp(attribute, INI_TRANSLATIONDLL) == 0)
+		STRCPY_FIXED(ci->translation_dll, value);
+	else if (stricmp(attribute, INI_TRANSLATIONOPTION) == 0)
+		STRCPY_FIXED(ci->translation_option, value);
 	else if (stricmp(attribute, INI_UPDATABLECURSORS) == 0 || stricmp(attribute, ABBR_UPDATABLECURSORS) == 0)
 		ci->allow_keyset = atoi(value);
 	else if (stricmp(attribute, INI_LFCONVERSION) == 0 || stricmp(attribute, ABBR_LFCONVERSION) == 0)
