@@ -488,8 +488,9 @@ static RETCODE connect_random_IP(ConnectionClass *conn, CnEntry *entry)
 	}
 	MYLOG(0, "leaving..%d.\n", ret);
 	/* Wipe password after successful connect to limit plaintext retention */
-	if (ret == SQL_SUCCESS || ret == SQL_SUCCESS_WITH_INFO)
+	if (ret == SQL_SUCCESS || ret == SQL_SUCCESS_WITH_INFO) {
 		CC_clear_password(ci);
+	}
 	return ret;
 }
 
@@ -686,8 +687,9 @@ PGAPI_Connect(HDBC hdbc,
 			ret = SQL_SUCCESS_WITH_INFO;
 		}
 		MYLOG(0, "leaving..%d.\n", ret);
-		if (SQL_SUCCESS == ret || SQL_SUCCESS_WITH_INFO == ret)
+		if (SQL_SUCCESS == ret || SQL_SUCCESS_WITH_INFO == ret) {
 			CC_clear_password(ci);
+		}
 	}
 	return ret;
 }
@@ -1280,8 +1282,7 @@ path_is_under_directory(const char *abs_file, const char *abs_dir)
 
 	STRCPY_FIXED(dirbuf, abs_dir);
 	dirlen = strlen(dirbuf);
-	while (dirlen > 0 && (dirbuf[dirlen - 1] == '\\' || dirbuf[dirlen - 1] == '/'))
-	{
+	while (dirlen > 0 && (dirbuf[dirlen - 1] == '\\' || dirbuf[dirlen - 1] == '/')) {
 		dirbuf[--dirlen] = '\0';
 	}
 	if (dirlen == 0)
@@ -1339,32 +1340,30 @@ CC_validate_translation_dll_path(const char *dll_path, char *out_path, size_t ou
 	if (!dll_path || !dll_path[0] || !out_path || out_len < 2)
 		return FALSE;
 
-	if (!is_windows_absolute_path(dll_path))
-	{
+	if (!is_windows_absolute_path(dll_path)) {
 		MYLOG(0, "translation DLL rejected (not absolute): %s\n", dll_path);
 		return FALSE;
 	}
 
-	if (!has_dll_extension(dll_path))
-	{
+	if (!has_dll_extension(dll_path)) {
 		MYLOG(0, "translation DLL rejected (not .dll): %s\n", dll_path);
 		return FALSE;
 	}
 
 	n = GetFullPathName(dll_path, sizeof(canonical), canonical, &filepart);
-	if (n == 0 || n >= sizeof(canonical) || filepart == NULL)
-	{
+	if (n == 0 || n >= sizeof(canonical) || filepart == NULL) {
 		MYLOG(0, "translation DLL rejected (GetFullPathName failed): %s\n", dll_path);
 		return FALSE;
 	}
 
 	/* Reject if normalization escaped (e.g. unexpected relative residue). */
-	if (!is_windows_absolute_path(canonical))
+	if (!is_windows_absolute_path(canonical)) {
 		return FALSE;
+	}
 
-	if (GetSystemDirectory(sysdir, sizeof(sysdir)) > 0 &&
-		path_is_under_directory(canonical, sysdir))
+	if (GetSystemDirectory(sysdir, sizeof(sysdir)) > 0 && path_is_under_directory(canonical, sysdir)) {
 		allowed = TRUE;
+	}
 
 	if (!allowed)
 	{

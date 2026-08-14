@@ -349,7 +349,17 @@ ConfigDlgProc(HWND hdlg,
 
 					/* Get Dialog Values */
 					GetDlgStuff(hdlg, &lpsetupdlg->ci);
-
+					/* Remind users of password security issues */ 
+ 					if ((lpsetupdlg->ci.password.name != NULL) && (strlen(lpsetupdlg->ci.password.name) > 0)) { 
+ 						int ret = MessageBox(lpsetupdlg->hwndParent,  
+ 											"The password will be stored in the system registry in plaintext." 
+ 											"It is not safe. Are you sure to continue?",  
+ 											"Information Security Warning",  
+ 											MB_ICONEXCLAMATION | MB_YESNO); 
+ 						if (ret == IDNO) { 
+ 							return TRUE; 
+ 						} 
+ 					}
 					
 					/* Update ODBC.INI */
 					SetDSNAttributes(hdlg, lpsetupdlg, NULL);
