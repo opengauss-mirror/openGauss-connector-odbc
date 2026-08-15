@@ -947,10 +947,11 @@ MYLOG(0, "drivername=%s\n", drivername);
 	if (SQLGetPrivateProfileString(DSN, INI_USERNAME, NULL_STRING, temp, sizeof(temp), ODBC_INI) > 0)
 		STRCPY_FIXED(ci->username, temp);
 
-	if (SQLGetPrivateProfileString(DSN, INI_PASSWORD, NULL_STRING, temp, sizeof(temp), ODBC_INI) > 0) { 
- 		ci->password = decode(temp); 
- 		if (strlen(temp)) 
- 			memset(temp, 0, strlen(temp)); 
+	if (SQLGetPrivateProfileString(DSN, INI_PASSWORD, NULL_STRING, temp, sizeof(temp), ODBC_INI) > 0) {
+ 		ci->password = decode(temp);
+ 		if (strlen(temp)) {
+ 			memset(temp, 0, strlen(temp));
+		}
  	}
 
 	if (SQLGetPrivateProfileString(DSN, INI_PORT, NULL_STRING, temp, sizeof(temp), ODBC_INI) > 0)
@@ -1302,8 +1303,8 @@ void
 writeDSNinfo(const ConnInfo *ci)
 {
 	const char *DSN = ci->dsn;
-    char		encoded_item[MEDIUM_REGISTRY_LEN],	 
- 				temp[SMALL_REGISTRY_LEN];
+    char		encoded_item[MEDIUM_REGISTRY_LEN];
+    char		temp[SMALL_REGISTRY_LEN];
 
 	SQLWritePrivateProfileString(DSN,
 								 INI_KDESC,
@@ -1331,10 +1332,10 @@ writeDSNinfo(const ConnInfo *ci)
 								 ODBC_INI);
 	SQLWritePrivateProfileString(DSN, INI_UID, ci->username, ODBC_INI);
 
-    encode(ci->password, encoded_item, sizeof(encoded_item));	 
- 	SQLWritePrivateProfileString(DSN, 
- 								 INI_PASSWORD, 
- 								 encoded_item, 
+    encode(ci->password, encoded_item, sizeof(encoded_item));
+ 	SQLWritePrivateProfileString(DSN,
+ 								 INI_PASSWORD,
+ 								 encoded_item,
  								 ODBC_INI);
 
 	SQLWritePrivateProfileString(DSN,
@@ -1968,15 +1969,13 @@ signed char	ci_updatable_cursors_set(ConnInfo *ci)
 	return	ci->updatable_cursors;
 }
 
-void
-CC_clear_password(ConnInfo *conninfo)
+void CC_clear_password(ConnInfo *conninfo)
 {
-	if (conninfo == NULL)
+	if (conninfo == NULL) {
 		return;
-	if (NAME_IS_VALID(conninfo->password))
-	{
+	}
+	if (NAME_IS_VALID(conninfo->password)) {
 		size_t	n = strlen(conninfo->password.name);
-
 		secure_zeromem(conninfo->password.name, n + 1);
 		free(conninfo->password.name);
 		conninfo->password.name = NULL;

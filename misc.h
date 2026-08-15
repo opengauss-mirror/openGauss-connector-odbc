@@ -29,9 +29,9 @@ char	   *my_trim(char *string);
 char	   *make_string(const SQLCHAR *s, SQLINTEGER len, char *buf, size_t bufsize);
 char *quote_table(const pgNAME schema, const pgNAME table, char *buf, int nuf_size);
 
-/* Wipe sensitive memory; must not be optimized away (memset_s / SecureZeroMemory / etc). */
-void		secure_zeromem(void *ptr, size_t len);
-void		secure_free(void *ptr, size_t len);
+/* Wipe sensitive memory; must not be optimized away (memset_s via securec.h). */
+void		secure_zeromem(char *ptr, size_t len);
+void		secure_free(char *ptr, size_t len);
 
 #define	GET_SCHEMA_NAME(nspname) 	(nspname)
 

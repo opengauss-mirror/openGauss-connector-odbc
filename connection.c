@@ -1271,8 +1271,7 @@ CC_cleanup(ConnectionClass *self, BOOL keepCommunication)
  * Return TRUE if abs_file is under abs_dir (after removing trailing separators
  * from abs_dir). Comparison is case-insensitive.
  */
-static BOOL
-path_is_under_directory(const char *abs_file, const char *abs_dir)
+static BOOL path_is_under_directory(const char *abs_file, const char *abs_dir)
 {
 	char		dirbuf[MAX_PATH];
 	size_t		dirlen;
@@ -1293,8 +1292,7 @@ path_is_under_directory(const char *abs_file, const char *abs_dir)
 	return abs_file[dirlen] == '\\' || abs_file[dirlen] == '/';
 }
 
-static BOOL
-is_windows_absolute_path(const char *path)
+static BOOL is_windows_absolute_path(const char *path)
 {
 	if (!path || !path[0])
 		return FALSE;
@@ -1308,17 +1306,16 @@ is_windows_absolute_path(const char *path)
 	return FALSE;
 }
 
-static BOOL
-has_dll_extension(const char *path)
+static BOOL has_dll_extension(const char *dll_path)
 {
-	size_t	len;
+	size_t	path_len;
 
-	if (!path)
+	if (!dll_path)
 		return FALSE;
-	len = strlen(path);
-	if (len < 4)
+	path_len = strlen(dll_path);
+	if (path_len < 4)
 		return FALSE;
-	return stricmp(path + len - 4, ".dll") == 0;
+	return stricmp(dll_path + path_len - 4, ".dll") == 0;
 }
 
 /*
@@ -1326,8 +1323,7 @@ has_dll_extension(const char *path)
  * System32, SysWOW64, or the ODBC driver directory. On success, writes the
  * canonical full path into out_path.
  */
-static BOOL
-CC_validate_translation_dll_path(const char *dll_path, char *out_path, size_t out_len)
+static BOOL CC_validate_translation_dll_path(const char *dll_path, char *out_path, size_t out_len)
 {
 	char		canonical[MAX_PATH];
 	char		sysdir[MAX_PATH];
@@ -1365,58 +1361,53 @@ CC_validate_translation_dll_path(const char *dll_path, char *out_path, size_t ou
 		allowed = TRUE;
 	}
 
-	if (!allowed)
-	{
+	if (!allowed) {
 		/*
 		 * Allow SysWOW64 without requiring GetSystemWow64Directory (may be
 		 * unavailable on older SDKs / _WIN32_WINNT).
 		 */
-		if (GetWindowsDirectory(wow64dir, sizeof(wow64dir)) > 0)
-		{
+		if (GetWindowsDirectory(wow64dir, sizeof(wow64dir)) > 0) {
 			size_t	wlen = strlen(wow64dir);
-
-			if (wlen > 0 && wlen + 9 < sizeof(wow64dir))
-			{
-				if (wow64dir[wlen - 1] != '\\' && wow64dir[wlen - 1] != '/')
+			if (wlen > 0 && wlen + 9 < sizeof(wow64dir)) {
+				if (wow64dir[wlen - 1] != '\\' && wow64dir[wlen - 1] != '/') {
 					STRCAT_FIXED(wow64dir, "\\");
+				}
 				STRCAT_FIXED(wow64dir, "SysWOW64");
-				if (path_is_under_directory(canonical, wow64dir))
+				if (path_is_under_directory(canonical, wow64dir)) {
 					allowed = TRUE;
+				}
 			}
 		}
 	}
 
-	if (!allowed)
-	{
+	if (!allowed) {
 		char	driver_path[MAX_PATH];
-
 		driver_path[0] = '\0';
 		CC_getLibpath(driver_path, sizeof(driver_path));
-		if (driver_path[0])
-		{
+		if (driver_path[0]) {
 			char	   *slash;
-
 			STRCPY_FIXED(driver_dir, driver_path);
 			slash = strrchr(driver_dir, '\\');
-			if (!slash)
+			if (!slash) {
 				slash = strrchr(driver_dir, '/');
-			if (slash)
-			{
+			}
+			if (slash) {
 				*slash = '\0';
-				if (path_is_under_directory(canonical, driver_dir))
+				if (path_is_under_directory(canonical, driver_dir)) {
 					allowed = TRUE;
+				}
 			}
 		}
 	}
 
-	if (!allowed)
-	{
+	if (!allowed) {
 		MYLOG(0, "translation DLL rejected (not in whitelist dirs): %s\n", canonical);
 		return FALSE;
 	}
 
-	if (strlen(canonical) >= out_len)
+	if (strlen(canonical) >= out_len) {
 		return FALSE;
+	}
 	strncpy_null(out_path, canonical, out_len);
 	return TRUE;
 }
@@ -1425,7 +1416,6 @@ CC_validate_translation_dll_path(const char *dll_path, char *out_path, size_t ou
 int
 CC_set_translation(ConnectionClass *self)
 {
-
 #ifdef WIN32
 	CSTR	func = "CC_set_translation";
 	char	canonical[MAX_PATH];
@@ -1448,9 +1438,7 @@ CC_set_translation(ConnectionClass *self)
 	 * Require a canonical absolute path under an allowed directory, then
 	 * load with LoadLibraryEx search flags.
 	 */
-	if (!CC_validate_translation_dll_path(self->connInfo.translation_dll,
-										  canonical, sizeof(canonical)))
-	{
+	if (!CC_validate_translation_dll_path(self->connInfo.translation_dll, canonical, sizeof(canonical))) {
 		CC_set_error(self, CONN_UNABLE_TO_LOAD_DLL,
 					 "Translation DLL path is not allowed. Use an absolute path under System32, SysWOW64, or the driver directory.",
 					 func);
@@ -1467,11 +1455,9 @@ CC_set_translation(ConnectionClass *self)
 #endif
 	load_flags = LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR | LOAD_LIBRARY_SEARCH_SYSTEM32;
 	self->translation_handle = LoadLibraryEx(canonical, NULL, load_flags);
-	if (self->translation_handle == NULL)
-	{
+	if (self->translation_handle == NULL) {
 		/* Older Windows without KB2533623: absolute path + altered search. */
-		self->translation_handle = LoadLibraryEx(canonical, NULL,
-												 LOAD_WITH_ALTERED_SEARCH_PATH);
+		self->translation_handle = LoadLibraryEx(canonical, NULL, LOAD_WITH_ALTERED_SEARCH_PATH);
 	}
 
 	if (self->translation_handle == NULL)
@@ -3623,8 +3609,7 @@ int split_host_or_port_with_limit(const char *str, char *result_array[MAX_PARTS]
  * embed the password in another heap buffer.
  * Returns 0 on success, -2 empty, -1 OOM, -3 host/port count mismatch.
  */
-static int
-validate_server_port(ConnInfo *ci, int *host_number, int *port_number)
+static int validate_server_port(ConnInfo *ci, int *host_number, int *port_number)
 {
 	char	   *host_array[MAX_PARTS] = {0};
 	char	   *port_array[MAX_PARTS] = {0};
@@ -3636,25 +3621,83 @@ validate_server_port(ConnInfo *ci, int *host_number, int *port_number)
 	*host_number = 0;
 	*port_number = 0;
 
-	if (!ci->server[0] || !ci->port[0])
+	if (!ci->server[0] || !ci->port[0]) {
 		return -2;
+	}
 
 	*host_number = split_host_or_port_with_limit(ci->server, host_array, &host_length);
 	*port_number = split_host_or_port_with_limit(ci->port, port_array, &port_length);
 
-	if (-1 == *host_number || -1 == *port_number)
+	if (-1 == *host_number || -1 == *port_number) {
 		rc = -1;
-	else if ((*host_number != *port_number) && *host_number != 1 && *port_number != 1)
+	} else if ((*host_number != *port_number) && *host_number != 1 && *port_number != 1) {
 		rc = -3;
+	}
 
-	for (i = 0; i < MAX_PARTS; i++)
-	{
-		if (host_array[i] != NULL)
+	for (i = 0; i < MAX_PARTS; i++) {
+		if (host_array[i] != NULL) {
 			free(host_array[i]);
-		if (port_array[i] != NULL)
+		}
+		if (port_array[i] != NULL) {
 			free(port_array[i]);
+		}
 	}
 	return rc;
+}
+
+static int
+find_libpq_option(const char **opts, int cnt, const char *keyword)
+{
+	int	j;
+
+	for (j = 0; j < cnt; j++) {
+		if (stricmp(opts[j], keyword) == 0) {
+			return j;
+		}
+	}
+	return -1;
+}
+
+/*
+ * Merge PQconninfoParse() options into opts/vals. Same keyword+value is
+ * skipped; a different value is a conflict. Returns FALSE on conflict.
+ */
+static BOOL
+merge_pqopt_into_params(ConnectionClass *self, const char **opts, const char **vals,
+						int *cnt, PQconninfoOption *conninfoOption, const char *func)
+{
+	PQconninfoOption *pqopt;
+	const char *keyword;
+	const char *val;
+	int			idx;
+	char		emsg[100];
+
+	if (conninfoOption == NULL) {
+		return TRUE;
+	}
+
+	for (pqopt = conninfoOption; (keyword = pqopt->keyword) != NULL; pqopt++) {
+		val = pqopt->val;
+		if (val == NULL) {
+			continue;
+		}
+
+		idx = find_libpq_option(opts, *cnt, keyword);
+		if (idx >= 0) {
+			if (vals[idx] != NULL && strcmp(vals[idx], val) == 0) {
+				continue;
+			}
+			SPRINTF_FIXED(emsg, "%s parameter in pqopt option conflicts with other ordinary option", keyword);
+			CC_set_error(self, CONN_OPENDB_ERROR, emsg, func);
+			return FALSE;
+		}
+		if (*cnt >= PROTOCOL3_OPTS_MAX - 1) {
+			continue;
+		}
+		opts[*cnt] = keyword;
+		vals[(*cnt)++] = val;
+	}
+	return TRUE;
 }
 
 static int
@@ -3667,8 +3710,8 @@ LIBPQ_connect(ConnectionClass *self)
 	int			pqret;
 	int			pversion;
 	const	char	*opts[PROTOCOL3_OPTS_MAX], *vals[PROTOCOL3_OPTS_MAX];
-	PQconninfoOption	*conninfoOption = NULL, *pqopt;
-	int			i, cnt;
+	PQconninfoOption	*conninfoOption = NULL;
+	int			cnt;
 	char		login_timeout_str[20];
 	char		keepalive_idle_str[20];
 	char		keepalive_interval_str[20];
@@ -3693,15 +3736,15 @@ LIBPQ_connect(ConnectionClass *self)
 	}
 
 	host_port_rc = validate_server_port(ci, &host_number, &port_number);
-	if (0 != host_port_rc)
-	{
-		if (-2 == host_port_rc)
+	if (0 != host_port_rc) {
+		if (-2 == host_port_rc) {
 			CC_set_error(self, CONN_INVALID_ARGUMENT_NO, "The server or port should not be empty.", func);
-		else if (-1 == host_port_rc)
+		} else if (-1 == host_port_rc) {
 			CC_set_error(self, CONN_NO_MEMORY_ERROR, "Memory allocation failure when resolving address.", func);
-		else
+		} else {
 			CC_set_error(self, CONN_VALUE_OUT_OF_RANGE,
 						 "The number of hosts should be the same as the number of ports when both are multiple.", func);
+		}
 		goto cleanup;
 	}
 
@@ -3728,10 +3771,11 @@ LIBPQ_connect(ConnectionClass *self)
 	}
 	if (host_number > 1 || port_number > 1) {
 		opts[cnt] = "target_session_attrs";
-		if ('\0' != ci->target_session_attrs[0])
+		if ('\0' != ci->target_session_attrs[0]) {
 			vals[cnt++] = ci->target_session_attrs;
-		else
+		} else {
 			vals[cnt++] = "read-write";
+		}
 	} else if ('\0' != ci->target_session_attrs[0]) {
 		opts[cnt] = "target_session_attrs";
 		vals[cnt++] = ci->target_session_attrs;
@@ -3887,35 +3931,14 @@ LIBPQ_connect(ConnectionClass *self)
 		opts[cnt] = "connection_info";
 		vals[cnt++] = local_conninfo;
 	}
-	if (conninfoOption != NULL) {
-		const char *keyword, *val;
-		int j;
-
-		for (i = 0, pqopt = conninfoOption; (keyword = pqopt->keyword) != NULL; i++, pqopt++) {
-			if ((val = pqopt->val) != NULL) {
-				for (j = 0; j < cnt; j++) {
-					if (stricmp(opts[j], keyword) == 0) {
-						char emsg[100];
-						if (vals[j] != NULL && strcmp(vals[j], val) == 0) {
-							continue;
-						}
-						SPRINTF_FIXED(emsg,
-									  "%s parameter in pqopt option conflicts with other ordinary option", keyword);
-						CC_set_error(self, CONN_OPENDB_ERROR, emsg, func);
-						goto cleanup;
-					}
-				}
-				if (j >= cnt && cnt < PROTOCOL3_OPTS_MAX - 1) {
-					opts[cnt] = keyword;
-					vals[cnt++] = val;
-				}
-			}
-		}
+	if (!merge_pqopt_into_params(self, opts, vals, &cnt, conninfoOption, func)) {
+		goto cleanup;
 	}
 	opts[cnt] = vals[cnt] = NULL;
 
 	if (get_qlog() > 0 || get_mylog() > 0) {
-		const char **popt, **pval;
+		const char **popt;
+		const char **pval;
 		QLOG(0, "PQconnectdbParams:");
 		for (popt = opts, pval = vals; *popt; popt++, pval++) {
 			if (stricmp(*popt, "password") == 0) {

@@ -348,8 +348,7 @@ test_result_set_cap(void)
 		}
 		printf("cap test connection string: %s\n", masked);
 	}
-	rc = SQLDriverConnect(hdbc, NULL, (SQLCHAR *) connstr, SQL_NTS,
-						  NULL, 0, NULL, SQL_DRIVER_COMPLETE);
+	rc = SQLDriverConnect(hdbc, NULL, (SQLCHAR *) connstr, SQL_NTS, NULL, 0, NULL, SQL_DRIVER_COMPLETE);
 	if (!SQL_SUCCEEDED(rc))
 	{
 		print_diag("FAIL: SQLDriverConnect(UseDeclareFetch=0) failed",
@@ -467,8 +466,7 @@ test_long_sslcert_path(void)
 
 	/* The connection will fail because the files do not exist, but it must
 	 * not crash due to URL buffer overflow. */
-	rc = SQLDriverConnect(hdbc, NULL, (SQLCHAR *) dsn, SQL_NTS,
-						  str, sizeof(str), &strl, SQL_DRIVER_COMPLETE);
+	rc = SQLDriverConnect(hdbc, NULL, (SQLCHAR *) dsn, SQL_NTS, str, sizeof(str), &strl, SQL_DRIVER_COMPLETE);
 	if (SQL_SUCCEEDED(rc))
 	{
 		printf("WARN: long sslcert path unexpectedly succeeded; disconnecting\n");
@@ -500,8 +498,7 @@ test_default_ssl_prefer(void)
 	}
 
 	build_connect_string(dsn, sizeof(dsn), NULL);
-	rc = SQLDriverConnect(hdbc, NULL, (SQLCHAR *) dsn, SQL_NTS,
-						  str, sizeof(str), &strl, SQL_DRIVER_COMPLETE);
+	rc = SQLDriverConnect(hdbc, NULL, (SQLCHAR *) dsn, SQL_NTS, str, sizeof(str), &strl, SQL_DRIVER_COMPLETE);
 	if (!SQL_SUCCEEDED(rc))
 	{
 		print_diag("FAIL: default SSL mode 'prefer' should allow connection",
@@ -627,23 +624,23 @@ check_log_redaction(const char *password,
  * Resolve server/port used by DRIVER-based connect strings (same defaults as
  * build_connect_string).
  */
-static void
-get_default_server_port(const char **server, const char **port)
+static void get_default_server_port(const char **server, const char **port)
 {
 	*server = getenv("ODBC_SERVER");
 	*port = getenv("ODBC_PORT");
-	if (!*server || !(*server)[0])
+	if (!*server || !(*server)[0]) {
 		*server = "127.0.0.1";
-	if (!*port || !(*port)[0])
+	}
+	if (!*port || !(*port)[0]) {
 		*port = "5432";
+	}
 }
 
 /*
  * After password-memory hardening, multi-host must use PQconnectdbParams (not
  * a postgres:// URI with embedded password). Verify connect + simple query.
  */
-static void
-test_multi_host_params_connect(void)
+static void test_multi_host_params_connect(void)
 {
 	SQLRETURN rc;
 	SQLHDBC hdbc = SQL_NULL_HDBC;
@@ -659,8 +656,7 @@ test_multi_host_params_connect(void)
 	get_default_server_port(&server, &port);
 
 	rc = SQLAllocHandle(SQL_HANDLE_DBC, env, &hdbc);
-	if (!SQL_SUCCEEDED(rc))
-	{
+	if (!SQL_SUCCEEDED(rc)) {
 		print_diag("SQLAllocHandle(DBC) failed", SQL_HANDLE_ENV, env);
 		exit(1);
 	}
@@ -674,18 +670,15 @@ test_multi_host_params_connect(void)
 			 server, server, port, port);
 	build_connect_string(dsn, sizeof(dsn), extra);
 
-	rc = SQLDriverConnect(hdbc, NULL, (SQLCHAR *) dsn, SQL_NTS,
-						  str, sizeof(str), &strl, SQL_DRIVER_COMPLETE);
-	if (!SQL_SUCCEEDED(rc))
-	{
+	rc = SQLDriverConnect(hdbc, NULL, (SQLCHAR *) dsn, SQL_NTS, str, sizeof(str), &strl, SQL_DRIVER_COMPLETE);
+	if (!SQL_SUCCEEDED(rc)) {
 		print_diag("FAIL: multi-host SQLDriverConnect failed", SQL_HANDLE_DBC, hdbc);
 		SQLFreeConnect(hdbc);
 		exit(1);
 	}
 
 	rc = SQLAllocHandle(SQL_HANDLE_STMT, hdbc, &hstmt);
-	if (!SQL_SUCCEEDED(rc))
-	{
+	if (!SQL_SUCCEEDED(rc)) {
 		print_diag("FAIL: SQLAllocHandle(STMT) failed", SQL_HANDLE_DBC, hdbc);
 		SQLDisconnect(hdbc);
 		SQLFreeConnect(hdbc);
@@ -693,8 +686,7 @@ test_multi_host_params_connect(void)
 	}
 
 	rc = SQLExecDirect(hstmt, (SQLCHAR *) "SELECT 1", SQL_NTS);
-	if (!SQL_SUCCEEDED(rc))
-	{
+	if (!SQL_SUCCEEDED(rc)) {
 		print_diag("FAIL: SELECT 1 after multi-host connect failed", SQL_HANDLE_STMT, hstmt);
 		SQLFreeHandle(SQL_HANDLE_STMT, hstmt);
 		SQLDisconnect(hdbc);
@@ -703,8 +695,7 @@ test_multi_host_params_connect(void)
 	}
 
 	rc = SQLFetch(hstmt);
-	if (!SQL_SUCCEEDED(rc))
-	{
+	if (!SQL_SUCCEEDED(rc)) {
 		print_diag("FAIL: SQLFetch after multi-host connect failed", SQL_HANDLE_STMT, hstmt);
 		SQLFreeHandle(SQL_HANDLE_STMT, hstmt);
 		SQLDisconnect(hdbc);
@@ -713,8 +704,7 @@ test_multi_host_params_connect(void)
 	}
 
 	rc = SQLGetData(hstmt, 1, SQL_C_SLONG, &one, sizeof(one), NULL);
-	if (!SQL_SUCCEEDED(rc) || one != 1)
-	{
+	if (!SQL_SUCCEEDED(rc) || one != 1) {
 		fprintf(stderr, "FAIL: expected SELECT 1 => 1, got %d (rc=%d)\n", (int) one, (int) rc);
 		SQLFreeHandle(SQL_HANDLE_STMT, hstmt);
 		SQLDisconnect(hdbc);
@@ -732,8 +722,7 @@ test_multi_host_params_connect(void)
 /*
  * Host/port list length mismatch must be rejected by validate_server_port.
  */
-static void
-test_multi_host_port_mismatch(void)
+static void test_multi_host_port_mismatch(void)
 {
 	SQLRETURN rc;
 	SQLHDBC hdbc = SQL_NULL_HDBC;
@@ -747,8 +736,7 @@ test_multi_host_port_mismatch(void)
 	get_default_server_port(&server, &port);
 
 	rc = SQLAllocHandle(SQL_HANDLE_DBC, env, &hdbc);
-	if (!SQL_SUCCEEDED(rc))
-	{
+	if (!SQL_SUCCEEDED(rc)) {
 		print_diag("SQLAllocHandle(DBC) failed", SQL_HANDLE_ENV, env);
 		exit(1);
 	}
@@ -759,10 +747,8 @@ test_multi_host_port_mismatch(void)
 			 server, server, port, port);
 	build_connect_string(dsn, sizeof(dsn), extra);
 
-	rc = SQLDriverConnect(hdbc, NULL, (SQLCHAR *) dsn, SQL_NTS,
-						  str, sizeof(str), &strl, SQL_DRIVER_COMPLETE);
-	if (SQL_SUCCEEDED(rc))
-	{
+	rc = SQLDriverConnect(hdbc, NULL, (SQLCHAR *) dsn, SQL_NTS, str, sizeof(str), &strl, SQL_DRIVER_COMPLETE);
+	if (SQL_SUCCEEDED(rc)) {
 		fprintf(stderr, "FAIL: mismatched host/port counts should fail, but connect succeeded\n");
 		SQLDisconnect(hdbc);
 		SQLFreeConnect(hdbc);
@@ -777,8 +763,7 @@ test_multi_host_port_mismatch(void)
  * Confirm MYLOG uses PQconnectdbParams (masked password) and never logs a
  * postgres:// URI that embeds password=.
  */
-static int
-check_params_path_logging(const char *password)
+static int check_params_path_logging(const char *password)
 {
 	char filename[PATH_MAX];
 	char line[8192];
@@ -791,57 +776,55 @@ check_params_path_logging(const char *password)
 	int found_pwd_masked = 0;
 
 	username = getenv("USER");
-	if (!username)
+	if (!username) {
 		username = getenv("LOGNAME");
-	if (!username)
+	}
+	if (!username) {
 		username = "unknown";
+	}
 
 	snprintf(filename, sizeof(filename),
 			 "/tmp/mylog_security-fix-test_%s%u.log", username, (unsigned) pid);
 
 	fp = fopen(filename, "r");
-	if (!fp)
-	{
-		fprintf(stderr,
-				"FAIL: could not open MYLOG file %s for Params-path check\n",
-				filename);
+	if (!fp) {
+		fprintf(stderr, "FAIL: could not open MYLOG file %s for Params-path check\n", filename);
 		return 1;
 	}
 
-	while (fgets(line, sizeof(line), fp))
-	{
-		if (password && strstr(line, password))
-		{
+	while (fgets(line, sizeof(line), fp)) {
+		if (password && strstr(line, password)) {
 			fprintf(stderr, "FAIL: MYLOG contains plaintext password: %s\n", line);
 			found_plain = 1;
 		}
-		if (strstr(line, "PQconnectdbParams:"))
+		if (strstr(line, "PQconnectdbParams:")) {
 			found_params = 1;
-		if (strstr(line, "connecting to the database using URL:"))
-		{
+		}
+		if (strstr(line, "connecting to the database using URL:")) {
 			fprintf(stderr, "FAIL: obsolete URL connect path still logged: %s\n", line);
 			found_url_path = 1;
 		}
-		if (strstr(line, "password='xxxxx'") || strstr(line, "password=xxxxx"))
+		if (strstr(line, "password='xxxxx'") || strstr(line, "password=xxxxx")) {
 			found_pwd_masked = 1;
+		}
 	}
 	fclose(fp);
 
-	if (!found_params)
-	{
+	if (!found_params) {
 		fprintf(stderr, "FAIL: MYLOG missing PQconnectdbParams line\n");
 		return 1;
 	}
-	if (found_url_path || found_plain)
+	if (found_url_path || found_plain) {
 		return 1;
-	if (found_pwd_masked)
+	}
+	if (found_pwd_masked) {
 		printf("OK: Params-path MYLOG masks password\n");
+	}
 	printf("OK: multi-host uses PQconnectdbParams (no URL password path)\n");
 	return 0;
 }
 
-static void
-test_multi_host_params_logging(void)
+static void test_multi_host_params_logging(void)
 {
 	SQLRETURN rc;
 	SQLHDBC hdbc = SQL_NULL_HDBC;
@@ -856,8 +839,7 @@ test_multi_host_params_logging(void)
 	get_default_server_port(&server, &port);
 
 	rc = SQLAllocHandle(SQL_HANDLE_DBC, env, &hdbc);
-	if (!SQL_SUCCEEDED(rc))
-	{
+	if (!SQL_SUCCEEDED(rc)) {
 		print_diag("SQLAllocHandle(DBC) failed", SQL_HANDLE_ENV, env);
 		exit(1);
 	}
@@ -867,22 +849,22 @@ test_multi_host_params_logging(void)
 			 server, server, port, port);
 	build_connect_string(dsn, sizeof(dsn), extra);
 
-	rc = SQLDriverConnect(hdbc, NULL, (SQLCHAR *) dsn, SQL_NTS,
-						  str, sizeof(str), &strl, SQL_DRIVER_COMPLETE);
-	if (SQL_SUCCEEDED(rc))
+	rc = SQLDriverConnect(hdbc, NULL, (SQLCHAR *) dsn, SQL_NTS, str, sizeof(str), &strl, SQL_DRIVER_COMPLETE);
+	if (SQL_SUCCEEDED(rc)) {
 		SQLDisconnect(hdbc);
+	}
 	SQLFreeConnect(hdbc);
 
-	if (check_params_path_logging(password) != 0)
+	if (check_params_path_logging(password) != 0) {
 		exit(1);
+	}
 }
 
 /*
  * SQLConnect path: auth succeeds and the connection remains usable after the
  * driver clears ci->password (wipe must not break the live PGconn).
  */
-static void
-test_sqlconnect_usable_after_password_wipe(void)
+static void test_sqlconnect_usable_after_password_wipe(void)
 {
 	SQLRETURN rc;
 	SQLHDBC hdbc = SQL_NULL_HDBC;
@@ -894,12 +876,12 @@ test_sqlconnect_usable_after_password_wipe(void)
 
 	get_default_server_port(&server, &port);
 	database = getenv("ODBC_DATABASE");
-	if (!database || !database[0])
+	if (!database || !database[0]) {
 		database = "postgres";
+	}
 
 	rc = SQLAllocHandle(SQL_HANDLE_DBC, env, &hdbc);
-	if (!SQL_SUCCEEDED(rc))
-	{
+	if (!SQL_SUCCEEDED(rc)) {
 		print_diag("SQLAllocHandle(DBC) failed", SQL_HANDLE_ENV, env);
 		exit(1);
 	}
@@ -908,8 +890,7 @@ test_sqlconnect_usable_after_password_wipe(void)
 	 * Prefer DSN=gaussdb when ODBC_DRIVER is unset (matches other tests).
 	 * With ODBC_DRIVER set, use DRIVER=... DriverConnect instead.
 	 */
-	if (getenv("ODBC_DRIVER") && getenv("ODBC_DRIVER")[0])
-	{
+	if (getenv("ODBC_DRIVER") && getenv("ODBC_DRIVER")[0]) {
 		SQLCHAR out[1024];
 		SQLSMALLINT outlen;
 		char connstr[1024];
@@ -917,21 +898,16 @@ test_sqlconnect_usable_after_password_wipe(void)
 		snprintf(connstr, sizeof(connstr),
 				 "DRIVER=%s;SERVER=%s;PORT=%s;DATABASE=%s;UID=odbc;PWD=Gauss@123",
 				 getenv("ODBC_DRIVER"), server, port, database);
-		rc = SQLDriverConnect(hdbc, NULL, (SQLCHAR *) connstr, SQL_NTS,
-							  out, sizeof(out), &outlen, SQL_DRIVER_COMPLETE);
-	}
-	else
-	{
+		rc = SQLDriverConnect(hdbc, NULL, (SQLCHAR *) connstr, SQL_NTS, out, sizeof(out), &outlen, SQL_DRIVER_COMPLETE);
+	} else {
 		rc = SQLConnect(hdbc,
 						(SQLCHAR *) "gaussdb", SQL_NTS,
 						(SQLCHAR *) "odbc", SQL_NTS,
 						(SQLCHAR *) "Gauss@123", SQL_NTS);
 	}
 
-	if (!SQL_SUCCEEDED(rc))
-	{
-		print_diag("FAIL: connect for password-wipe usability test failed",
-				   SQL_HANDLE_DBC, hdbc);
+	if (!SQL_SUCCEEDED(rc)) {
+		print_diag("FAIL: connect for password-wipe usability test failed", SQL_HANDLE_DBC, hdbc);
 		SQLFreeConnect(hdbc);
 		exit(1);
 	}
@@ -946,8 +922,7 @@ test_sqlconnect_usable_after_password_wipe(void)
 	CHECK_STMT_RESULT(rc, "SQLFetch failed after password wipe", hstmt);
 
 	rc = SQLGetData(hstmt, 1, SQL_C_SLONG, &one, sizeof(one), NULL);
-	if (!SQL_SUCCEEDED(rc) || one != 1)
-	{
+	if (!SQL_SUCCEEDED(rc) || one != 1) {
 		fprintf(stderr, "FAIL: expected 1 after password wipe, got %d\n", (int) one);
 		exit(1);
 	}
@@ -963,25 +938,21 @@ test_sqlconnect_usable_after_password_wipe(void)
 /*
  * Helper: DriverConnect with an extra TranslationDLL=... attribute.
  */
-static SQLRETURN
-driver_connect_with_translation_dll(SQLHDBC hdbc, const char *translation_dll,
-									SQLCHAR *out, SQLSMALLINT outmax,
-									SQLSMALLINT *outlen)
+static SQLRETURN driver_connect_with_translation_dll(SQLHDBC hdbc, const char *translation_dll,
+									                 SQLCHAR *out, SQLSMALLINT outmax, SQLSMALLINT *outlen)
 {
 	char dsn[4096];
 	char extra[1024];
 
 	snprintf(extra, sizeof(extra), "TranslationDLL=%s", translation_dll);
 	build_connect_string(dsn, sizeof(dsn), extra);
-	return SQLDriverConnect(hdbc, NULL, (SQLCHAR *) dsn, SQL_NTS,
-							out, outmax, outlen, SQL_DRIVER_COMPLETE);
+	return SQLDriverConnect(hdbc, NULL, (SQLCHAR *) dsn, SQL_NTS, out, outmax, outlen, SQL_DRIVER_COMPLETE);
 }
 
 /*
  * Relative / bare DLL names must be rejected (DLL search-order hijack).
  */
-static void
-test_translation_dll_rejects_relative_path(void)
+static void test_translation_dll_rejects_relative_path(void)
 {
 	SQLRETURN rc;
 	SQLHDBC hdbc = SQL_NULL_HDBC;
@@ -989,15 +960,13 @@ test_translation_dll_rejects_relative_path(void)
 	SQLSMALLINT strl;
 
 	rc = SQLAllocHandle(SQL_HANDLE_DBC, env, &hdbc);
-	if (!SQL_SUCCEEDED(rc))
-	{
+	if (!SQL_SUCCEEDED(rc)) {
 		print_diag("SQLAllocHandle(DBC) failed", SQL_HANDLE_ENV, env);
 		exit(1);
 	}
 
 	rc = driver_connect_with_translation_dll(hdbc, "evil.dll", str, sizeof(str), &strl);
-	if (SQL_SUCCEEDED(rc))
-	{
+	if (SQL_SUCCEEDED(rc)) {
 		fprintf(stderr, "FAIL: TranslationDLL=evil.dll should be rejected\n");
 		SQLDisconnect(hdbc);
 		SQLFreeConnect(hdbc);
@@ -1006,8 +975,7 @@ test_translation_dll_rejects_relative_path(void)
 	printf("OK: TranslationDLL relative name rejected\n");
 
 	rc = driver_connect_with_translation_dll(hdbc, ".\\evil.dll", str, sizeof(str), &strl);
-	if (SQL_SUCCEEDED(rc))
-	{
+	if (SQL_SUCCEEDED(rc)) {
 		fprintf(stderr, "FAIL: TranslationDLL=.\\evil.dll should be rejected\n");
 		SQLDisconnect(hdbc);
 		SQLFreeConnect(hdbc);
@@ -1016,8 +984,7 @@ test_translation_dll_rejects_relative_path(void)
 	printf("OK: TranslationDLL .\\relative path rejected\n");
 
 	rc = driver_connect_with_translation_dll(hdbc, "..\\evil.dll", str, sizeof(str), &strl);
-	if (SQL_SUCCEEDED(rc))
-	{
+	if (SQL_SUCCEEDED(rc)) {
 		fprintf(stderr, "FAIL: TranslationDLL=..\\evil.dll should be rejected\n");
 		SQLDisconnect(hdbc);
 		SQLFreeConnect(hdbc);
@@ -1031,8 +998,7 @@ test_translation_dll_rejects_relative_path(void)
 /*
  * Absolute path outside System32 / SysWOW64 / driver dir must be rejected.
  */
-static void
-test_translation_dll_rejects_non_whitelisted_path(void)
+static void test_translation_dll_rejects_non_whitelisted_path(void)
 {
 	SQLRETURN rc;
 	SQLHDBC hdbc = SQL_NULL_HDBC;
@@ -1043,8 +1009,7 @@ test_translation_dll_rejects_non_whitelisted_path(void)
 	DWORD n;
 
 	n = GetTempPath(sizeof(tmppath), tmppath);
-	if (n == 0 || n >= sizeof(tmppath))
-	{
+	if (n == 0 || n >= sizeof(tmppath)) {
 		fprintf(stderr, "FAIL: GetTempPath failed\n");
 		exit(1);
 	}
@@ -1052,18 +1017,14 @@ test_translation_dll_rejects_non_whitelisted_path(void)
 	snprintf(evilpath, sizeof(evilpath), "%sevil_odbc_translate.dll", tmppath);
 
 	rc = SQLAllocHandle(SQL_HANDLE_DBC, env, &hdbc);
-	if (!SQL_SUCCEEDED(rc))
-	{
+	if (!SQL_SUCCEEDED(rc)) {
 		print_diag("SQLAllocHandle(DBC) failed", SQL_HANDLE_ENV, env);
 		exit(1);
 	}
 
 	rc = driver_connect_with_translation_dll(hdbc, evilpath, str, sizeof(str), &strl);
-	if (SQL_SUCCEEDED(rc))
-	{
-		fprintf(stderr,
-				"FAIL: TranslationDLL outside whitelist should be rejected: %s\n",
-				evilpath);
+	if (SQL_SUCCEEDED(rc)) {
+		fprintf(stderr, "FAIL: TranslationDLL outside whitelist should be rejected: %s\n", evilpath);
 		SQLDisconnect(hdbc);
 		SQLFreeConnect(hdbc);
 		exit(1);
@@ -1072,8 +1033,7 @@ test_translation_dll_rejects_non_whitelisted_path(void)
 
 	snprintf(evilpath, sizeof(evilpath), "%sevil_odbc_translate.txt", tmppath);
 	rc = driver_connect_with_translation_dll(hdbc, evilpath, str, sizeof(str), &strl);
-	if (SQL_SUCCEEDED(rc))
-	{
+	if (SQL_SUCCEEDED(rc)) {
 		fprintf(stderr, "FAIL: TranslationDLL without .dll suffix should be rejected\n");
 		SQLDisconnect(hdbc);
 		SQLFreeConnect(hdbc);
@@ -1087,8 +1047,7 @@ test_translation_dll_rejects_non_whitelisted_path(void)
 /*
  * Path traversal that escapes whitelist after GetFullPathName must be rejected.
  */
-static void
-test_translation_dll_rejects_path_traversal(void)
+static void test_translation_dll_rejects_path_traversal(void)
 {
 	SQLRETURN rc;
 	SQLHDBC hdbc = SQL_NULL_HDBC;
@@ -1097,8 +1056,7 @@ test_translation_dll_rejects_path_traversal(void)
 	char sysdir[MAX_PATH];
 	char evilpath[MAX_PATH];
 
-	if (GetSystemDirectory(sysdir, sizeof(sysdir)) == 0)
-	{
+	if (GetSystemDirectory(sysdir, sizeof(sysdir)) == 0) {
 		fprintf(stderr, "FAIL: GetSystemDirectory failed\n");
 		exit(1);
 	}
@@ -1107,18 +1065,14 @@ test_translation_dll_rejects_path_traversal(void)
 			 "%s\\..\\Temp\\evil_odbc_translate.dll", sysdir);
 
 	rc = SQLAllocHandle(SQL_HANDLE_DBC, env, &hdbc);
-	if (!SQL_SUCCEEDED(rc))
-	{
+	if (!SQL_SUCCEEDED(rc)) {
 		print_diag("SQLAllocHandle(DBC) failed", SQL_HANDLE_ENV, env);
 		exit(1);
 	}
 
 	rc = driver_connect_with_translation_dll(hdbc, evilpath, str, sizeof(str), &strl);
-	if (SQL_SUCCEEDED(rc))
-	{
-		fprintf(stderr,
-				"FAIL: TranslationDLL path traversal should be rejected: %s\n",
-				evilpath);
+	if (SQL_SUCCEEDED(rc)) {
+		fprintf(stderr, "FAIL: TranslationDLL path traversal should be rejected: %s\n", evilpath);
 		SQLDisconnect(hdbc);
 		SQLFreeConnect(hdbc);
 		exit(1);
@@ -1131,8 +1085,7 @@ test_translation_dll_rejects_path_traversal(void)
 /*
  * Omitting TranslationDLL must still allow a normal connection.
  */
-static void
-test_translation_dll_absent_connect_ok(void)
+static void test_translation_dll_absent_connect_ok(void)
 {
 	SQLRETURN rc;
 	SQLHDBC hdbc = SQL_NULL_HDBC;
@@ -1141,17 +1094,14 @@ test_translation_dll_absent_connect_ok(void)
 	char dsn[1024];
 
 	rc = SQLAllocHandle(SQL_HANDLE_DBC, env, &hdbc);
-	if (!SQL_SUCCEEDED(rc))
-	{
+	if (!SQL_SUCCEEDED(rc)) {
 		print_diag("SQLAllocHandle(DBC) failed", SQL_HANDLE_ENV, env);
 		exit(1);
 	}
 
 	build_connect_string(dsn, sizeof(dsn), NULL);
-	rc = SQLDriverConnect(hdbc, NULL, (SQLCHAR *) dsn, SQL_NTS,
-						  str, sizeof(str), &strl, SQL_DRIVER_COMPLETE);
-	if (!SQL_SUCCEEDED(rc))
-	{
+	rc = SQLDriverConnect(hdbc, NULL, (SQLCHAR *) dsn, SQL_NTS, str, sizeof(str), &strl, SQL_DRIVER_COMPLETE);
+	if (!SQL_SUCCEEDED(rc)) {
 		print_diag("FAIL: connect without TranslationDLL failed", SQL_HANDLE_DBC, hdbc);
 		SQLFreeConnect(hdbc);
 		exit(1);
@@ -1195,8 +1145,7 @@ test_log_password_redaction(void)
 			 sslcert, sslkey, sslrootcert);
 	build_connect_string(dsn, sizeof(dsn), extra);
 
-	rc = SQLDriverConnect(hdbc, NULL, (SQLCHAR *) dsn, SQL_NTS,
-						  str, sizeof(str), &strl, SQL_DRIVER_COMPLETE);
+	rc = SQLDriverConnect(hdbc, NULL, (SQLCHAR *) dsn, SQL_NTS, str, sizeof(str), &strl, SQL_DRIVER_COMPLETE);
 	if (SQL_SUCCEEDED(rc))
 	{
 		printf("WARN: multi-host connection unexpectedly succeeded; disconnecting\n");
