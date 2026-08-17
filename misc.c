@@ -20,6 +20,7 @@
 #include <string.h>
 #include <ctype.h>
 #include <time.h>
+#include "securec.h"
 
 #ifndef WIN32
 #include <pwd.h>
@@ -28,7 +29,29 @@
 #else
 #include <process.h>			/* Byron: is this where Windows keeps def.
 								 * of getpid ? */
+#include <windows.h>
 #endif
+
+/*
+ * Overwrite sensitive bytes so compilers cannot elide the wipe.
+ */
+void secure_zeromem(char *ptr, size_t len)
+{
+	if (ptr == NULL || len == 0) {
+		return;
+	}
+
+	(void) memset_s(ptr, len, 0, len);
+}
+
+void secure_free(char *ptr, size_t len)
+{
+	if (ptr == NULL) {
+		return;
+	}
+	secure_zeromem(ptr, len);
+	free(ptr);
+}
 
 /*
  *	returns STRCPY_FAIL, STRCPY_TRUNCATED, or #bytes copied

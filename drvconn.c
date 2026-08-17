@@ -172,6 +172,7 @@ PGAPI_DriverConnect(HDBC hdbc,
 	if (!dconn_get_DSN_or_Driver(connStrIn, ci))
 	{
 		CC_set_error(conn, CONN_OPENDB_ERROR, "Connection string parse error", func);
+		secure_free(connStrIn, strlen(connStrIn) + 1);
 		return SQL_ERROR;
 	}
 	/*
@@ -184,12 +185,13 @@ PGAPI_DriverConnect(HDBC hdbc,
 	if (!dconn_get_connect_attributes(connStrIn, ci))
 	{
 		CC_set_error(conn, CONN_OPENDB_ERROR, "Connection string parse error", func);
+		secure_free(connStrIn, strlen(connStrIn) + 1);
 		return SQL_ERROR;
 	}
 	logs_on_off(1, ci->drivers.debug, ci->drivers.commlog);
 	if (connStrIn)
 	{
-		free(connStrIn);
+		secure_free(connStrIn, strlen(connStrIn) + 1);
 		connStrIn = NULL;
 	}
 
@@ -343,6 +345,12 @@ MYLOG(DETAIL_LOG_LEVEL, "before CC_connect\n");
 #endif /* FORCE_PASSWORD_DISPLAY */
 
 	MYLOG(0, "leaving %d\n", result);
+	/* Output string has been built; wipe driver-held password copy */
+	if (SQL_SUCCEEDED(result))
+	{
+		secure_zeromem(connStrOut, sizeof(connStrOut));
+		CC_clear_password(ci);
+	}
 	return result;
 }
 

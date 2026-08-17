@@ -708,6 +708,7 @@ enum { /* CC_conninfo_init option */
 };
 void	CC_conninfo_init(ConnInfo *conninfo, UInt4 option);
 void	CC_conninfo_release(ConnInfo *conninfo);
+void	CC_clear_password(ConnInfo *conninfo);
 void	CC_copy_conninfo(ConnInfo *ci, const ConnInfo *sci);
 const char *GetExeProgramName();
 #ifdef	POSIX_MULTITHREAD_SUPPORT

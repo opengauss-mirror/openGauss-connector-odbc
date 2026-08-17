@@ -654,6 +654,10 @@ copyConnAttributes(ConnInfo *ci, const char *attribute, char *value)
 	{
 		ci->pqopt = decode_or_remove_braces(value);
 	}
+	else if (stricmp(attribute, INI_TRANSLATIONDLL) == 0)
+		STRCPY_FIXED(ci->translation_dll, value);
+	else if (stricmp(attribute, INI_TRANSLATIONOPTION) == 0)
+		STRCPY_FIXED(ci->translation_option, value);
 	else if (stricmp(attribute, INI_UPDATABLECURSORS) == 0 || stricmp(attribute, ABBR_UPDATABLECURSORS) == 0)
 		ci->allow_keyset = atoi(value);
 	else if (stricmp(attribute, INI_LFCONVERSION) == 0 || stricmp(attribute, ABBR_LFCONVERSION) == 0)
@@ -942,6 +946,13 @@ MYLOG(0, "drivername=%s\n", drivername);
 
 	if (SQLGetPrivateProfileString(DSN, INI_USERNAME, NULL_STRING, temp, sizeof(temp), ODBC_INI) > 0)
 		STRCPY_FIXED(ci->username, temp);
+
+	if (SQLGetPrivateProfileString(DSN, INI_PASSWORD, NULL_STRING, temp, sizeof(temp), ODBC_INI) > 0) {
+ 		ci->password = decode(temp);
+ 		if (strlen(temp)) {
+ 			memset(temp, 0, strlen(temp));
+		}
+ 	}
 
 	if (SQLGetPrivateProfileString(DSN, INI_PORT, NULL_STRING, temp, sizeof(temp), ODBC_INI) > 0)
 		STRCPY_FIXED(ci->port, temp);
@@ -1292,7 +1303,8 @@ void
 writeDSNinfo(const ConnInfo *ci)
 {
 	const char *DSN = ci->dsn;
-    char temp[SMALL_REGISTRY_LEN];
+    char		encoded_item[MEDIUM_REGISTRY_LEN];
+    char		temp[SMALL_REGISTRY_LEN];
 
 	SQLWritePrivateProfileString(DSN,
 								 INI_KDESC,
@@ -1320,7 +1332,11 @@ writeDSNinfo(const ConnInfo *ci)
 								 ODBC_INI);
 	SQLWritePrivateProfileString(DSN, INI_UID, ci->username, ODBC_INI);
 
-    SQLWritePrivateProfileString(DSN, INI_PASSWORD, "", ODBC_INI);
+    encode(ci->password, encoded_item, sizeof(encoded_item));
+ 	SQLWritePrivateProfileString(DSN,
+ 								 INI_PASSWORD,
+ 								 encoded_item,
+ 								 ODBC_INI);
 
 	SQLWritePrivateProfileString(DSN,
 								 TARGET_SESSION_ATTRS,
@@ -1953,10 +1969,23 @@ signed char	ci_updatable_cursors_set(ConnInfo *ci)
 	return	ci->updatable_cursors;
 }
 
+void CC_clear_password(ConnInfo *conninfo)
+{
+	if (conninfo == NULL) {
+		return;
+	}
+	if (NAME_IS_VALID(conninfo->password)) {
+		size_t	n = strlen(conninfo->password.name);
+		secure_zeromem(conninfo->password.name, n + 1);
+		free(conninfo->password.name);
+		conninfo->password.name = NULL;
+	}
+}
+
 void
 CC_conninfo_release(ConnInfo *conninfo)
 {
-	NULL_THE_NAME(conninfo->password);
+	CC_clear_password(conninfo);
 	NULL_THE_NAME(conninfo->conn_settings);
 	NULL_THE_NAME(conninfo->pqopt);
 	finalize_globals(&conninfo->drivers);
