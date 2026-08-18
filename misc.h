@@ -29,7 +29,7 @@ char	   *my_trim(char *string);
 char	   *make_string(const SQLCHAR *s, SQLINTEGER len, char *buf, size_t bufsize);
 char *quote_table(const pgNAME schema, const pgNAME table, char *buf, int nuf_size);
 
-/* Wipe sensitive memory; must not be optimized away (memset_s via securec.h). */
+/* Wipe sensitive memory; must not be optimized away. */
 void		secure_zeromem(char *ptr, size_t len);
 void		secure_free(char *ptr, size_t len);
 

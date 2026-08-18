@@ -20,7 +20,6 @@
 #include <string.h>
 #include <ctype.h>
 #include <time.h>
-#include "securec.h"
 
 #ifndef WIN32
 #include <pwd.h>
@@ -41,7 +40,7 @@ void secure_zeromem(char *ptr, size_t len)
 		return;
 	}
 
-	(void) memset_s(ptr, len, 0, len);
+	(void) memset(ptr, 0, len);
 }
 
 void secure_free(char *ptr, size_t len)
