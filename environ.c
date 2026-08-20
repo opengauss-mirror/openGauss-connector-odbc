@@ -625,15 +625,16 @@ EN_remove_connection(EnvironmentClass *self, ConnectionClass *conn)
 {
 	int			i;
 
+	ENTER_CONNS_CS;
 	for (i = 0; i < conns_count; i++)
 		if (conns[i] == conn && conns[i]->status != CONN_EXECUTING)
 		{
-			ENTER_CONNS_CS;
 			conns[i] = NULL;
 			LEAVE_CONNS_CS;
 			return TRUE;
 		}
 
+	LEAVE_CONNS_CS;
 	return FALSE;
 }
 

@@ -5606,10 +5606,32 @@ retry_public_schema:
 			{
 				QResultClass	*gres;
 				int		i;
-				char	*grolist, *uid, *delm;
+				char	*grolist, *uid, *delm, *escaped_user;
+				size_t	user_len;
+				int		escape_error = 0;
 
 				resetPQExpBuffer(&proc_query);
-				appendPQExpBuffer(&proc_query, "select grolist from pg_group where groname = '%s'", user);
+				user_len = strlen(user);
+				if (user_len > (((size_t) -1) - 1) / 2)
+				{
+					SC_set_error(stmt, STMT_VALUE_OUT_OF_RANGE, "Group name is too large in PGAPI_TablePrivileges()", func);
+					goto cleanup;
+				}
+				escaped_user = (char *) malloc(user_len * 2 + 1);
+				if (escaped_user == NULL)
+				{
+					SC_set_error(stmt, STMT_NO_MEMORY_ERROR, "Out of memory in PGAPI_TablePrivileges()", func);
+					goto cleanup;
+				}
+				PQescapeStringConn(conn->pqconn, escaped_user, user, user_len, &escape_error);
+				if (escape_error)
+				{
+					free(escaped_user);
+					SC_set_error(stmt, STMT_EXEC_ERROR, "Failed to escape group name in PGAPI_TablePrivileges()", func);
+					goto cleanup;
+				}
+				appendPQExpBuffer(&proc_query, "select grolist from pg_group where groname = '%s'", escaped_user);
+				free(escaped_user);
 				if (PQExpBufferDataBroken(proc_query))
 				{
 					SC_set_error(stmt, STMT_NO_MEMORY_ERROR, "Out of memory in PGAPI_TablePrivileges()", func);

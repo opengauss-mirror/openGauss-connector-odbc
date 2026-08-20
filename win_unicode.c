@@ -194,6 +194,15 @@ MYPRINTF(0, " newlen=" FORMAT_LEN, ilen);
 			else if (surrog1_bits == (*wstr & surrog_check))
 			{
 				surrd1 = (*wstr & ~surrog_check) + surrogate_adjust;
+				if (i + 1 >= ilen || surrog2_bits != (wstr[1] & surrog_check))
+				{
+					free(utf8str);
+					if (olen)
+					{
+						*olen = SQL_ERROR;
+					}
+					return NULL;
+				}
 				wstr++;
 				i++;
 				surrd2 = (*wstr & ~surrog_check);

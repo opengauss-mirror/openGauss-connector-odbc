@@ -7,15 +7,14 @@
 
 #include "common.h"
 
-#ifdef WIN32
 #include <sqlucode.h>
-#endif
 
 #define PWD_PREFIX_LEN 4
 #define MAX_FETCH_DIAGNOSTIC 200
 #define LONG_PATH_LEN 1000
 #define ALPHABET_SIZE 26
 #define LARGE_RESULT_ROW_COUNT 100000
+#define NOTICE_LIMIT_SLACK 8300
 
 /*
  * Regression tests for security fixes in odbc-brainafk/漏洞清单.csv rows 7-15.
@@ -41,8 +40,9 @@
  * expose the necessary state (e.g. MYLOG files).
  *
  * Coverage note:
- *   - Vulnerability #9 (SQLConnectW length validation in win_unicode.c) is
- *     exercised only on Windows builds; the test is compiled out on Linux.
+ *   - The SQLPrepareW orphan surrogate test runs on Linux when SQLWCHAR is a
+ *     2-byte UTF-16 code unit. It exercises the real ODBC W API path.
+ *   - The SQLConnectW invalid negative length test is Windows-only.
  *   - Password-memory hardening: multi-host uses PQconnectdbParams (no URI
  *     with embedded password); password wipe must leave the live connection
  *     usable; MYLOG must not print plaintext passwords or the old URL path.
@@ -179,6 +179,116 @@ test_descriptor_uaf(void)
 		exit(1);
 	}
 	printf("OK: statement reused after freeing user descriptor without UAF\n");
+
+	rc = SQLFreeStmt(hstmt, SQL_DROP);
+	CHECK_STMT_RESULT(rc, "SQLFreeStmt failed", hstmt);
+}
+
+static void
+test_oversized_batch_paramset(void)
+{
+	SQLRETURN rc;
+	HSTMT hstmt = SQL_NULL_HSTMT;
+	SQLULEN too_large = (SQLULEN) INT_MAX + 1;
+
+	rc = SQLAllocStmt(conn, &hstmt);
+	CHECK_STMT_RESULT(rc, "SQLAllocStmt failed", hstmt);
+
+	rc = SQLSetStmtAttr(hstmt, SQL_ATTR_PARAMSET_SIZE,
+						(SQLPOINTER) too_large, 0);
+	if (rc != SQL_ERROR)
+	{
+		fprintf(stderr,
+				"FAIL: oversized SQL_ATTR_PARAMSET_SIZE should return SQL_ERROR, got %d\n",
+				rc);
+		exit(1);
+	}
+	printf("OK: oversized batch paramset rejected before allocation\n");
+
+	rc = SQLFreeStmt(hstmt, SQL_DROP);
+	CHECK_STMT_RESULT(rc, "SQLFreeStmt failed", hstmt);
+}
+
+static void
+test_notice_limit(void)
+{
+	SQLRETURN rc;
+	HSTMT hstmt = SQL_NULL_HSTMT;
+	SQLCHAR state[16];
+	SQLCHAR message[20000];
+	SQLINTEGER native_error;
+	SQLSMALLINT text_len;
+
+	rc = SQLAllocStmt(conn, &hstmt);
+	CHECK_STMT_RESULT(rc, "SQLAllocStmt failed", hstmt);
+
+	rc = SQLExecDirect(hstmt,
+					   (SQLCHAR *) "CREATE OR REPLACE FUNCTION security_many_notices() RETURNS void AS $$"
+					   "declare i int;"
+					   "begin "
+					   "  for i in 1..200 loop "
+					   "    raise notice '%', repeat('x', 100);"
+					   "  end loop;"
+					   "end;"
+					   "$$ LANGUAGE plpgsql",
+					   SQL_NTS);
+	CHECK_STMT_RESULT(rc, "create notice function failed", hstmt);
+
+	rc = SQLFreeStmt(hstmt, SQL_CLOSE);
+	CHECK_STMT_RESULT(rc, "SQLFreeStmt failed", hstmt);
+
+	rc = SQLExecDirect(hstmt, (SQLCHAR *) "SELECT security_many_notices()", SQL_NTS);
+	CHECK_STMT_RESULT(rc, "notice query failed", hstmt);
+	if (rc != SQL_SUCCESS_WITH_INFO)
+	{
+		fprintf(stderr, "FAIL: expected notice diagnostic\n");
+		exit(1);
+	}
+
+	rc = SQLGetDiagRec(SQL_HANDLE_STMT, hstmt, 1, state, &native_error,
+					   message, sizeof(message), &text_len);
+	CHECK_STMT_RESULT(rc, "SQLGetDiagRec failed", hstmt);
+	if (text_len > NOTICE_LIMIT_SLACK)
+	{
+		fprintf(stderr, "FAIL: notice diagnostic too long: %d\n", text_len);
+		exit(1);
+	}
+
+	printf("OK: notice diagnostic buffer stayed bounded after repeated server notices\n");
+
+	rc = SQLFreeStmt(hstmt, SQL_CLOSE);
+	CHECK_STMT_RESULT(rc, "SQLFreeStmt failed", hstmt);
+
+	rc = SQLFreeStmt(hstmt, SQL_DROP);
+	CHECK_STMT_RESULT(rc, "SQLFreeStmt failed", hstmt);
+}
+
+static void
+test_table_privileges(void)
+{
+	SQLRETURN rc;
+	HSTMT hstmt = SQL_NULL_HSTMT;
+
+	rc = SQLAllocStmt(conn, &hstmt);
+	CHECK_STMT_RESULT(rc, "SQLAllocStmt failed", hstmt);
+
+	rc = SQLExecDirect(hstmt, (SQLCHAR *) "DROP TABLE IF EXISTS security_priv_test", SQL_NTS);
+	CHECK_STMT_RESULT(rc, "drop security_priv_test failed", hstmt);
+
+	rc = SQLExecDirect(hstmt, (SQLCHAR *) "CREATE TABLE security_priv_test(id int)", SQL_NTS);
+	CHECK_STMT_RESULT(rc, "create security_priv_test failed", hstmt);
+
+	rc = SQLFreeStmt(hstmt, SQL_CLOSE);
+	CHECK_STMT_RESULT(rc, "SQLFreeStmt failed", hstmt);
+
+	rc = SQLTablePrivileges(hstmt, NULL, 0, NULL, 0,
+							(SQLCHAR *) "security_priv_test", SQL_NTS);
+	CHECK_STMT_RESULT(rc, "SQLTablePrivileges failed", hstmt);
+
+	printf("OK: SQLTablePrivileges completed after group-name escaping change\n");
+
+	rc = SQLFreeStmt(hstmt, SQL_CLOSE);
+	CHECK_STMT_RESULT(rc, "SQLFreeStmt failed", hstmt);
 
 	rc = SQLFreeStmt(hstmt, SQL_DROP);
 	CHECK_STMT_RESULT(rc, "SQLFreeStmt failed", hstmt);
@@ -1193,6 +1303,37 @@ test_large_result_set(void)
 	CHECK_STMT_RESULT(rc, "SQLFreeStmt failed", hstmt);
 }
 
+static void
+test_sqlpreparew_orphan_surrogate(void)
+{
+	SQLRETURN rc;
+	HSTMT hstmt = SQL_NULL_HSTMT;
+	SQLWCHAR bad_sql[1];
+
+	if (sizeof(SQLWCHAR) != 2)
+	{
+		printf("SKIP: SQLPrepareW orphan surrogate test requires 2-byte SQLWCHAR\n");
+		return;
+	}
+
+	rc = SQLAllocStmt(conn, &hstmt);
+	CHECK_STMT_RESULT(rc, "SQLAllocStmt failed", hstmt);
+
+	bad_sql[0] = 0xd800;
+	rc = SQLPrepareW(hstmt, bad_sql, 1);
+	if (rc != SQL_ERROR)
+	{
+		fprintf(stderr,
+				"FAIL: orphan UTF-16 high surrogate should return SQL_ERROR, got %d\n",
+				rc);
+		exit(1);
+	}
+	printf("OK: SQLPrepareW rejected orphan UTF-16 high surrogate without OOB read\n");
+
+	rc = SQLFreeStmt(hstmt, SQL_DROP);
+	CHECK_STMT_RESULT(rc, "SQLFreeStmt failed", hstmt);
+}
+
 #ifdef WIN32
 static void
 test_sqlconnectw_invalid_length(void)
@@ -1239,7 +1380,11 @@ int main(int argc, char **argv)
 	test_bind_parameter_zero();
 	test_sqlputdata_negative_length();
 	test_descriptor_uaf();
+	test_oversized_batch_paramset();
+	test_notice_limit();
+	test_table_privileges();
 	test_large_result_set();
+	test_sqlpreparew_orphan_surrogate();
 	test_result_set_cap();
 
 	test_disconnect_keep_env();

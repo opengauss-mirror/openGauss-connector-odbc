@@ -19,7 +19,7 @@
 
 #include <stdio.h>
 #include <string.h>
-
+#include <limits.h>
 
 #include "environ.h"
 #include "connection.h"
@@ -689,11 +689,18 @@ APDSetField(DescriptorClass *desc, SQLSMALLINT RecNumber,
 	APDFields	*opts = &(desc->apdf);
 	SQLSMALLINT	para_idx;
 	BOOL		unbind = TRUE;
+    SQLULEN     array_size;
 
 	switch (FieldIdentifier)
 	{
 		case SQL_DESC_ARRAY_SIZE:
-			opts->paramset_size = CAST_UPTR(SQLUINTEGER, Value);
+            array_size = CAST_UPTR(SQLULEN, Value);
+            if (array_size > (SQLULEN) INT_MAX)
+            {
+                DC_set_error(desc, DESC_VALUE_OUT_OF_RANGE, "SQL_DESC_ARRAY_SIZE is too large");
+                return SQL_ERROR;
+            }
+            opts->paramset_size = (SQLLEN) array_size;
 			return ret;
 		case SQL_DESC_ARRAY_STATUS_PTR:
 			opts->param_operation_ptr = Value;
@@ -1910,6 +1917,7 @@ PGAPI_SetStmtAttr(HSTMT StatementHandle,
 	RETCODE	ret = SQL_SUCCESS;
 	CSTR func = "PGAPI_SetStmtAttr";
 	StatementClass *stmt = (StatementClass *) StatementHandle;
+    SQLULEN paramset_size;
 
 	MYLOG(0, "entering Handle=%p %d," FORMAT_ULEN "(%p)\n", StatementHandle, Attribute, (SQLULEN) Value, Value);
 	switch (Attribute)
@@ -1976,7 +1984,13 @@ MYLOG(DETAIL_LOG_LEVEL, "set ard=%p\n", stmt->ard);
 			SC_get_IPDF(stmt)->param_processed_ptr = (SQLULEN *) Value;
 			break;
 		case SQL_ATTR_PARAMSET_SIZE:	/* 22 */
-			SC_get_APDF(stmt)->paramset_size = CAST_UPTR(SQLULEN, Value);
+            paramset_size = CAST_UPTR(SQLULEN, Value);
+            if (paramset_size > (SQLULEN) INT_MAX)
+            {
+                SC_set_error(stmt, STMT_VALUE_OUT_OF_RANGE, "SQL_ATTR_PARAMSET_SIZE is too large", func);
+                return SQL_ERROR;
+            }
+            SC_get_APDF(stmt)->paramset_size = (SQLLEN) paramset_size;
 			break;
 		case SQL_ATTR_ROW_BIND_OFFSET_PTR:		/* 23 */
 			SC_get_ARDF(stmt)->row_offset_ptr = (SQLULEN *) Value;

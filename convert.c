@@ -3095,7 +3095,7 @@ MYLOG(DETAIL_LOG_LEVEL, "type=%d concur=%d\n", stmt->options.cursor_type, stmt->
 		}
 		if (SC_is_fetchcursor(stmt))
 		{
-			snprintfcat(new_statement, qb->str_alsize,
+            snprintfcat(new_statement, qb->str_alsize,
 				"declare \"%s\"%s cursor%s for ",
 				SC_cursor_name(stmt), opt_scroll, opt_hold);
 			qb->npos = strlen(new_statement);
@@ -4204,6 +4204,19 @@ cleanup:
  * Build an array of parameters to pass to libpq's PQexecPreparedBatch
  * function.
  */
+static BOOL
+checked_mul_size(size_t left, size_t right, size_t *result)
+{
+    if (left != 0 && right > ((size_t) -1) / left)
+    {
+        return FALSE;
+    }
+    *result = left * right;
+    return TRUE;
+}
+
+#define MAX_BATCH_PARAM_ALLOC_SIZE ((size_t) INT_MAX)
+
 BOOL
 build_libpq_bind_params_batch(StatementClass *stmt,
 						int *nParams,
@@ -4218,7 +4231,11 @@ build_libpq_bind_params_batch(StatementClass *stmt,
 	QueryBuild	qb;
 	SQLSMALLINT	num_p;
 	int			i, num_params;
-	int			total_rows;
+    SQLLEN      total_rows;
+    size_t      param_type_bytes;
+    size_t      batch_elems;
+    size_t      param_value_bytes;
+    size_t      param_int_bytes;
 	ConnectionClass	*conn = SC_get_conn(stmt);
 	BOOL		ret = FALSE, discard_output;
 	RETCODE		retval;
@@ -4244,21 +4261,66 @@ build_libpq_bind_params_batch(StatementClass *stmt,
 		SC_set_error(stmt, STMT_COUNT_FIELD_INCORRECT, "The # of binded parameters < the # of parameter markers", func);
 		return FALSE;
 	}
+    if (num_params <= 0)
+    {
+        SC_set_error(stmt, STMT_COUNT_FIELD_INCORRECT, "No parameter marker for batch execution", func);
+        return FALSE;
+    }
+    if (total_rows <= 0 || total_rows > INT_MAX)
+    {
+        SC_set_error(stmt, STMT_VALUE_OUT_OF_RANGE, "SQL_ATTR_PARAMSET_SIZE is too large", func);
+        return FALSE;
+    }
+    if (!checked_mul_size(sizeof(OID), (size_t) num_params, &param_type_bytes) ||
+        !checked_mul_size((size_t) num_params, (size_t) total_rows, &batch_elems) ||
+        !checked_mul_size(sizeof(char *), batch_elems, &param_value_bytes) ||
+        !checked_mul_size(sizeof(int), batch_elems, &param_int_bytes))
+    {
+        SC_set_error(stmt, STMT_VALUE_OUT_OF_RANGE, "batch parameter array size is too large", func);
+        return FALSE;
+    }
+    if (param_type_bytes == 0 || param_type_bytes > MAX_BATCH_PARAM_ALLOC_SIZE ||
+        param_value_bytes == 0 || param_value_bytes > MAX_BATCH_PARAM_ALLOC_SIZE ||
+        param_int_bytes == 0 || param_int_bytes > MAX_BATCH_PARAM_ALLOC_SIZE)
+    {
+        SC_set_error(stmt, STMT_VALUE_OUT_OF_RANGE, "batch parameter array size is invalid", func);
+        return FALSE;
+    }
 
 	if (QB_initialize(&qb, MIN_ALC_SIZE, stmt, RPM_BUILDING_BIND_REQUEST) < 0)
 		return FALSE;
 
-	*paramTypes = malloc(sizeof(OID) * num_params);
+    if (param_type_bytes == 0 || param_type_bytes > MAX_BATCH_PARAM_ALLOC_SIZE)
+    {
+        SC_set_error(stmt, STMT_VALUE_OUT_OF_RANGE, "parameter type array size is invalid", func);
+        goto cleanup;
+    }
+    *paramTypes = malloc(param_type_bytes);
 	if (*paramTypes == NULL)
 		goto cleanup;
-	*paramValues = malloc(sizeof(char *) * num_params * total_rows);
+    if (param_value_bytes == 0 || param_value_bytes > MAX_BATCH_PARAM_ALLOC_SIZE)
+    {
+        SC_set_error(stmt, STMT_VALUE_OUT_OF_RANGE, "parameter value array size is invalid", func);
+        goto cleanup;
+    }
+    *paramValues = malloc(param_value_bytes);
 	if (*paramValues == NULL)
 		goto cleanup;
-	memset(*paramValues, 0, sizeof(char *) * num_params * total_rows);
-	*paramLengths = malloc(sizeof(int) * num_params * total_rows);
+    memset(*paramValues, 0, param_value_bytes);
+    if (param_int_bytes == 0 || param_int_bytes > MAX_BATCH_PARAM_ALLOC_SIZE)
+    {
+        SC_set_error(stmt, STMT_VALUE_OUT_OF_RANGE, "parameter length array size is invalid", func);
+        goto cleanup;
+    }
+    *paramLengths = malloc(param_int_bytes);
 	if (*paramLengths == NULL)
 		goto cleanup;
-	*paramFormats = malloc(sizeof(int) * num_params * total_rows);
+    if (param_int_bytes == 0 || param_int_bytes > MAX_BATCH_PARAM_ALLOC_SIZE)
+    {
+        SC_set_error(stmt, STMT_VALUE_OUT_OF_RANGE, "parameter format array size is invalid", func);
+        goto cleanup;
+    }
+    *paramFormats = malloc(param_int_bytes);
 	if (*paramFormats == NULL)
 		goto cleanup;
 
