@@ -681,7 +681,11 @@ MYLOG(DETAIL_LOG_LEVEL, "entering %p->external=%d\n", stmt, stmt->external);
 	if (conn)
 		ci = &conn->connInfo;
 
-	if (!ci || ci->rollback_on_error < 0) /* default */
+	if (CC_uses_protocol_autosave(conn))
+	{
+		ret = (conn && PG_VERSION_LT(conn, 8.0)) ? 1 : 2;
+	}
+	else if (!ci || ci->rollback_on_error < 0) /* default */
 	{
 		if (conn && PG_VERSION_GE(conn, 8.0))
 			ret = 2; /* statement rollback */
@@ -784,24 +788,48 @@ MYLOG(DETAIL_LOG_LEVEL, " %p->accessed=%d opt=%u in_progress=%u prev=%u\n", conn
 		}
 		if (need_savep)
 		{
-			if (0 != (option & SVPOPT_REDUCE_ROUNDTRIP))
+			if (CC_uses_protocol_autosave(conn))
 			{
-				conn->internal_op = PREPEND_IN_PROGRESS;
-				CC_set_accessed_db(conn);
-				return ret;
+				if (0 != (option & SVPOPT_REDUCE_ROUNDTRIP))
+				{
+					conn->internal_op = PREPEND_IN_PROGRESS;
+					CC_set_accessed_db(conn);
+					return ret;
+				}
+				conn->internal_op = SAVEPOINT_IN_PROGRESS;
+				if (CC_send_protocol_savepoint(conn, FALSE, TRUE, FALSE, func))
+				{
+					ret = SQL_SUCCESS;
+					CC_start_rbpoint(conn);
+				}
+				else
+				{
+					SC_set_error(stmt, STMT_INTERNAL_ERROR, "internal SAVEPOINT failed", func);
+					ret = SQL_ERROR;
+				}
+				conn->internal_op = 0;
 			}
-			GenerateSvpCommand(conn, INTERNAL_SAVEPOINT_OPERATION, cmd, sizeof(cmd));
-			conn->internal_op = SAVEPOINT_IN_PROGRESS;
-			res = CC_send_query(conn, cmd, NULL, 0, NULL);
-			conn->internal_op = 0;
-			if (QR_command_maybe_successful(res))
-				ret = SQL_SUCCESS;
 			else
 			{
-				SC_set_error(stmt, STMT_INTERNAL_ERROR, "internal SAVEPOINT failed", func);
-				ret = SQL_ERROR;
+				if (0 != (option & SVPOPT_REDUCE_ROUNDTRIP))
+				{
+					conn->internal_op = PREPEND_IN_PROGRESS;
+					CC_set_accessed_db(conn);
+					return ret;
+				}
+				GenerateSvpCommand(conn, INTERNAL_SAVEPOINT_OPERATION, cmd, sizeof(cmd));
+				conn->internal_op = SAVEPOINT_IN_PROGRESS;
+				res = CC_send_query(conn, cmd, NULL, 0, NULL);
+				conn->internal_op = 0;
+				if (QR_command_maybe_successful(res))
+					ret = SQL_SUCCESS;
+				else
+				{
+					SC_set_error(stmt, STMT_INTERNAL_ERROR, "internal SAVEPOINT failed", func);
+					ret = SQL_ERROR;
+				}
+				QR_Destructor(res);
 			}
-			QR_Destructor(res);
 		}
 	}
 	CC_set_accessed_db(conn);

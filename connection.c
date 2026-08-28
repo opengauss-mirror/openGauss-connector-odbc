@@ -2476,6 +2476,85 @@ CC_from_PGresult(QResultClass *res, StatementClass *stmt,
 	return success;
 }
 
+BOOL
+CC_uses_protocol_autosave(const ConnectionClass *self)
+{
+	return self &&
+		self->connInfo.autosave == AUTOSAVE_INTERNAL &&
+		!self->connInfo.drivers.for_extension_connector;
+}
+
+static int
+CC_queue_protocol_savepoint(ConnectionClass *self, BOOL rollback, const char *func)
+{
+	int ok;
+
+	if (rollback)
+		ok = PQsendRollbackToSavepoint(self->pqconn);
+	else
+		ok = PQsendSavepoint(self->pqconn);
+
+	if (!ok)
+	{
+		CC_set_error(self, CONNECTION_COMMUNICATION_ERROR,
+			PQerrorMessage(self->pqconn), func);
+		return 0;
+	}
+	return 1;
+}
+
+int
+CC_send_protocol_savepoint(ConnectionClass *self, BOOL rollback, BOOL sync, BOOL ignore_abort, const char *func)
+{
+	PGresult *pgres = NULL;
+	/* Protocol savepoint packets are silent; no PGresult is success. */
+	int ret = 1;
+
+	if (!self || !self->pqconn)
+		return 0;
+
+	if (!CC_queue_protocol_savepoint(self, rollback, func))
+		return 0;
+
+	if (!sync)
+		return 1;
+
+	if (!PQsendProtocolSync(self->pqconn))
+	{
+		CC_set_error(self, CONNECTION_COMMUNICATION_ERROR,
+			PQerrorMessage(self->pqconn), func);
+		CC_on_abort(self, CONN_DEAD);
+		return 0;
+	}
+
+	while ((pgres = PQgetResult(self->pqconn)) != NULL)
+	{
+		switch (PQresultStatus(pgres))
+		{
+			case PGRES_COMMAND_OK:
+			case PGRES_EMPTY_QUERY:
+				break;
+			case PGRES_NONFATAL_ERROR:
+				handle_pgres_error(self, pgres, func, NULL, FALSE);
+				break;
+			default:
+				ret = 0;
+				handle_pgres_error(self, pgres, func, NULL, TRUE);
+				break;
+		}
+		PQclear(pgres);
+	}
+
+	if (ret && rollback)
+	{
+		if (ignore_abort)
+			CC_set_no_error_trans(self);
+		LIBPQ_update_transaction_status(self);
+	}
+
+	return ret;
+}
+
 int
 CC_internal_rollback(ConnectionClass *self, int rollback_type, BOOL ignore_abort)
 {
@@ -2488,6 +2567,11 @@ CC_internal_rollback(ConnectionClass *self, int rollback_type, BOOL ignore_abort
 	switch (rollback_type)
 	{
 		case PER_STATEMENT_ROLLBACK:
+			if (CC_uses_protocol_autosave(self) && self->internal_svp)
+			{
+				ret = CC_send_protocol_savepoint(self, TRUE, TRUE, ignore_abort, __FUNCTION__);
+				break;
+			}
 			GenerateSvpCommand(self, INTERNAL_ROLLBACK_OPERATION, cmd, sizeof(cmd));
 			QLOG(0, "PQexec: %p '%s'\n", self->pqconn, cmd);
 			pgres = PQexec(self->pqconn, cmd);
@@ -2507,6 +2591,11 @@ CC_internal_rollback(ConnectionClass *self, int rollback_type, BOOL ignore_abort
 			}
 			break;
 		case PER_QUERY_ROLLBACK:
+			if (CC_uses_protocol_autosave(self))
+			{
+				ret = CC_send_protocol_savepoint(self, TRUE, TRUE, ignore_abort, __FUNCTION__);
+				break;
+			}
 			SPRINTF_FIXED(cmd, "%s TO %s;%s %s"
 				, rbkcmd, per_query_svp , rlscmd, per_query_svp);
 			QLOG(0, "PQsendQuery: %p '%s'\n", self->pqconn, cmd);
@@ -2525,6 +2614,8 @@ CC_internal_rollback(ConnectionClass *self, int rollback_type, BOOL ignore_abort
 					default:
 						handle_pgres_error(self, pgres, __FUNCTION__, NULL, !ret);
 				}
+				PQclear(pgres);
+				pgres = NULL;
 			}
 			if (!ret)
 			{
@@ -2579,6 +2670,8 @@ CC_send_query_append(ConnectionClass *self, const char *query, QueryInfo *qi, UD
 			discard_next_begin = FALSE,
 			discard_next_savepoint = FALSE,
 			discard_next_release = FALSE,
+			protocol_statement_savepoint = FALSE,
+			protocol_savepoint_queued = FALSE,
 			consider_rollback;
 	BOOL	discardTheRest = FALSE;
 	int		func_cs_count = 0;
@@ -2687,23 +2780,47 @@ CC_send_query_append(ConnectionClass *self, const char *query, QueryInfo *qi, UD
 	}
 	else if (query_rollback && !self->connInfo.drivers.for_extension_connector)
 	{
-		appendPQExpBuffer(&query_buf, "%s %s;", svpcmd, per_query_svp);
-		discard_next_savepoint = TRUE;
+		if (CC_uses_protocol_autosave(self))
+		{
+			if (!CC_queue_protocol_savepoint(self, FALSE, func))
+				goto cleanup;
+			protocol_savepoint_queued = TRUE;
+		}
+		else
+		{
+			appendPQExpBuffer(&query_buf, "%s %s;", svpcmd, per_query_svp);
+			discard_next_savepoint = TRUE;
+		}
 	}
 	else if (prepend_savepoint)
 	{
-		char   	prepend_cmd[128];
+		if (CC_uses_protocol_autosave(self))
+		{
+			if (!CC_queue_protocol_savepoint(self, FALSE, func))
+			{
+				self->internal_op = 0;
+				goto cleanup;
+			}
+			self->internal_op = SAVEPOINT_IN_PROGRESS;
+			protocol_statement_savepoint = TRUE;
+			protocol_savepoint_queued = TRUE;
+		}
+		else
+		{
+			char   	prepend_cmd[128];
 
-		GenerateSvpCommand(self, INTERNAL_SAVEPOINT_OPERATION, prepend_cmd, sizeof(prepend_cmd));
-		appendPQExpBuffer(&query_buf, "%s;", prepend_cmd);
-		self->internal_op = SAVEPOINT_IN_PROGRESS;
+			GenerateSvpCommand(self, INTERNAL_SAVEPOINT_OPERATION, prepend_cmd, sizeof(prepend_cmd));
+			appendPQExpBuffer(&query_buf, "%s;", prepend_cmd);
+			self->internal_op = SAVEPOINT_IN_PROGRESS;
+		}
 	}
 	appendPQExpBufferStr(&query_buf, query);
 	if (appendq)
 	{
 		appendPQExpBuffer(&query_buf, ";%s", appendq);
 	}
-	if (query_rollback && !self->connInfo.drivers.for_extension_connector)
+	if (query_rollback && !self->connInfo.drivers.for_extension_connector
+		&& !CC_uses_protocol_autosave(self))
 	{
 		appendPQExpBuffer(&query_buf, ";%s %s", rlscmd, per_query_svp);
 	}
@@ -2726,6 +2843,17 @@ CC_send_query_append(ConnectionClass *self, const char *query, QueryInfo *qi, UD
 		QLOG(0, "\nCommunication Error: %s\n", SAFE_STR(errmsg));
 		CC_set_error(self, CONNECTION_COMMUNICATION_ERROR, errmsg, func);
 		goto cleanup;
+	}
+	protocol_savepoint_queued = FALSE;
+	/*
+	 * The protocol savepoint packet is silent. The first PGresult belongs to
+	 * the SQL query, so mark the local rollback point without discarding it.
+	 */
+	if (protocol_statement_savepoint &&
+		SAVEPOINT_IN_PROGRESS == self->internal_op)
+	{
+		CC_start_rbpoint(self);
+		self->internal_op = 0;
 	}
 	PQsetSingleRowMode(self->pqconn);
 
@@ -2754,7 +2882,11 @@ CC_send_query_append(ConnectionClass *self, const char *query, QueryInfo *qi, UD
 		int status = PQresultStatus(pgres);
 
 		if (discardTheRest)
+		{
+			PQclear(pgres);
+			pgres = NULL;
 			continue;
+		}
 		switch (status)
 		{
 			case PGRES_COMMAND_OK:
@@ -3017,6 +3149,33 @@ cleanup:
 		PQclear(pgres);
 		pgres = NULL;
 	}
+	if (protocol_savepoint_queued && self->pqconn)
+	{
+		/*
+		 * A protocol savepoint was queued but never flushed/consumed
+		 * (PQsendQuery failed after the savepoint was queued).
+		 * Flush the stale savepoint, then queue a rollback+Sync
+		 * to drain the pipeline and restore protocol state.
+		 */
+		if (!PQsendRollbackToSavepoint(self->pqconn) ||
+			!PQsendProtocolSync(self->pqconn))
+		{
+			CC_set_error(self, CONNECTION_COMMUNICATION_ERROR,
+				PQerrorMessage(self->pqconn), func);
+		}
+		else
+		{
+			while ((pgres = PQgetResult(self->pqconn)) != NULL)
+			{
+				PQclear(pgres);
+				pgres = NULL;
+			}
+		}
+		protocol_savepoint_queued = FALSE;
+	}
+	if (protocol_statement_savepoint &&
+		SAVEPOINT_IN_PROGRESS == self->internal_op)
+		self->internal_op = 0;
 MYLOG(DETAIL_LOG_LEVEL, " rollback_on_error=%d CC_is_in_trans=%d discard_next_savepoint=%d query_rollback=%d\n", rollback_on_error, CC_is_in_trans(self), discard_next_savepoint, query_rollback);
 	if (rollback_on_error && CC_is_in_trans(self) && !discard_next_savepoint)
 	{
