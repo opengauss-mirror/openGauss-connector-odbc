@@ -93,6 +93,17 @@ FIND_LIBRARY(LIB_SSL 	 NAMES ssl     PATHS ${OPENSSL_DIR}/lib)
 FIND_LIBRARY(LIB_SECUREC NAMES securec PATHS ${LIBPQ_DIR}/lib)
 FIND_LIBRARY(LIB_LIBPQ   NAMES pq      PATHS ${LIBPQ_DIR}/lib)
 
+INCLUDE(CheckLibraryExists)
+CHECK_LIBRARY_EXISTS(${LIB_LIBPQ} PQsendSavepoint "" HAVE_PQSENDSAVEPOINT)
+CHECK_LIBRARY_EXISTS(${LIB_LIBPQ} PQsendRollbackToSavepoint "" HAVE_PQSENDROLLBACKTOSAVEPOINT)
+CHECK_LIBRARY_EXISTS(${LIB_LIBPQ} PQsendProtocolSync "" HAVE_PQSENDPROTOCOLSYNC)
+IF(NOT HAVE_PQSENDSAVEPOINT OR NOT HAVE_PQSENDROLLBACKTOSAVEPOINT OR NOT HAVE_PQSENDPROTOCOLSYNC)
+  MESSAGE(FATAL_ERROR "libpq is missing autosave=internal protocol symbols.
+  The installed libpq does not support autosave=internal protocol extension.
+  These symbols were added in openGauss-server feat/autosave-internal branch (libpq-fe.h).
+  Please rebuild against a libpq that includes the autosave protocol extension.")
+ENDIF()
+
 TARGET_LINK_LIBRARIES(DLL_PSQLODBC
 		      ${LIB_LIBPQ}
 		      -lodbc32

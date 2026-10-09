@@ -47,6 +47,7 @@ TESTBINS = exe/connect-test \
 	exe/deprecated-test \
 	exe/errors-test \
 	exe/error-rollback-test \
+	exe/per-query-rollback-leak-test \
 	exe/diagnostic-test \
 	exe/numeric-test \
 	exe/large-object-test \

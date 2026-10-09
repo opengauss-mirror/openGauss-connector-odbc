@@ -517,6 +517,10 @@ enum {
 #define CC_init_opt_in_progress(a) ((a)->opt_in_progress = INIT_SVPOPT)
 #define CC_init_opt_previous(a) ((a)->opt_previous = INIT_SVPOPT)
 
+/*      Protocol-based autosave (autosave=internal) */
+BOOL CC_uses_protocol_autosave(const ConnectionClass *conn);
+int	CC_send_protocol_savepoint(ConnectionClass *conn, BOOL rollback, BOOL sync, BOOL ignore_abort, const char *func);
+
 #ifdef	__cplusplus
 }
 #endif

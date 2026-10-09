@@ -98,6 +98,8 @@ extern "C" {
 											 * behavior. Called "Protocol"
 											 * for historical reasons */
 #define ABBR_PROTOCOL			"A1"
+#define INI_AUTOSAVE			"Autosave"
+#define ABBR_AUTOSAVE			"AS"
 /*	"Optimizer", abbreviated to B4 used to stand for "disable genetic query
  * optimizer". No longer supported, you can use generic ConnSettings instead.
 #define INI_OPTIMIZER			"Optimizer"

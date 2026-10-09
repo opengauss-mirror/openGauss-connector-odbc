@@ -515,6 +515,12 @@ typedef struct GlobalValues_
 	char		unique_index;
 	char		use_declarefetch;
 	char		for_extension_connector; /* Only for extension connector, disable savepoints in ODBC */
+
+/* Autosave mode for internal savepoint protocol optimization */
+enum {
+	AUTOSAVE_UNSPECIFIED = -1,
+	AUTOSAVE_INTERNAL = 1
+};
 	char		text_as_longvarchar;
 	char		unknowns_as_longvarchar;
 	char		bools_as_char;
@@ -658,6 +664,7 @@ typedef struct
 	signed char	use_server_side_prepare;
 	signed char	lower_case_identifier;
 	signed char	rollback_on_error;
+	signed char	autosave;
 	signed char	force_abbrev_connstr;
 	signed char	bde_environment;
 	signed char	fake_mss;
